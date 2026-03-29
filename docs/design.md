@@ -21,114 +21,6 @@ The library must be:
 
 The document is intended to be an implementation specification, not a tutorial.
 
-## Known gaps to address in this specification
-
-This document already captures most of the target architecture, but the first implementation also needs explicit specification for the following areas:
-
-- deterministic model resolution when the same model name may exist under multiple providers
-- normalized handling of partial or unavailable usage on aborted or failed streams
-- default history validation and repair rules for incomplete tool-call sequences
-- provider-specific edge cases where disabling reasoning requires an explicit provider-native marker rather than omitting the field
-- provider behavior when streamed tool calls omit IDs or arguments
-
-## Recommended solutions for the identified gaps
-
-### 1. Deterministic model resolution
-
-Use `provider:model` as the canonical external model identifier.
-
-Rules:
-
-- registry lookups are keyed by `(provider, model)`
-- bare model IDs are convenience-only and may be resolved only when unique across the registry
-- ambiguous bare model IDs must raise `ModelResolutionError` and include the matching providers/models in the error
-- public helpers should prefer explicit APIs such as `get_model(provider, model)` over implicit global lookup
-
-This keeps model selection deterministic and avoids accidental cross-provider routing.
-
-### 2. Partial or unavailable usage
-
-Extend `Usage` with a completeness field:
-
-```python
-class Usage(BaseModel):
-    input_tokens: int = 0
-    output_tokens: int = 0
-    reasoning_tokens: int = 0
-    cache_read_tokens: int = 0
-    cache_write_tokens: int = 0
-    total_tokens: int = 0
-    completeness: Literal["final", "partial", "none"] = "none"
-```
-
-Rules:
-
-- `final` means the provider supplied authoritative end-of-request usage
-- `partial` means some usage was observed, but interruption or provider behavior prevents treating it as final
-- `none` means no trustworthy usage is available
-- cost is authoritative only when usage completeness is `final`
-- when completeness is `partial`, cost should be surfaced as best-effort only
-
-### 3. Default history normalization and repair
-
-Keep strict validation available, but require a conservative normalization pass before dispatch.
-
-Recommended modes:
-
-- `strict`: raise on invalid semantic history
-- `permissive`: repair provider-rejectable but non-semantic structural issues
-
-Permissive normalization may:
-
-- drop empty text or reasoning blocks
-- omit orphaned tool calls when they would invalidate the next outbound request
-- preserve valid user content, visible assistant text, and valid tool results
-- avoid inventing synthetic semantic content by default
-
-Default recommendation: strict semantic validation plus conservative structural normalization.
-
-### 4. Provider-native reasoning disable mapping
-
-The common API should standardize on:
-
-```python
-ReasoningConfig(enabled=False)
-```
-
-Provider adapters must map that to the correct native disable behavior.
-
-Rules:
-
-- if a provider requires an explicit disabled marker, the adapter must send it
-- if a provider treats omission as disabled, omission is acceptable
-- provider support is described through capability flags rather than hardcoded branches in generic client code
-
-### 5. Missing tool-call IDs or arguments in streams
-
-The normalized stream assembler must tolerate incomplete provider emissions.
-
-Rules:
-
-- if a provider omits a tool-call ID, synthesize one that is stable for the lifetime of that response
-- if a provider omits tool-call arguments, normalize them to `{}`
-- tool-call ID synthesis and normalization must preserve correlation with later tool results in the same provider session
-- provider adapters may further constrain IDs to satisfy provider-native length or character requirements
-
-### 6. Capability flags over provider-name branching
-
-Provider quirks that affect generic mapping should be expressed through model or provider capability flags.
-
-Recommended examples:
-
-- `supports_developer_role`
-- `requires_explicit_reasoning_disable`
-- `usage_final_only`
-- `tool_call_id_max_length`
-- `tool_call_id_charset`
-- `supports_parallel_tool_calls`
-
-This keeps the generic client logic data-driven and prevents hardcoded behavior tied only to provider names.
-
 ## Goals
 
 - Provide one developer-facing API for text generation, reasoning, tool calling, multimodal input, and streaming.
@@ -320,6 +212,17 @@ Notes:
 - `capabilities` stores protocol and model feature flags that do not justify dedicated top-level fields.
 - `protocol_defaults` stores provider-specific default knobs that may need to be merged into requests.
 - `extra` stores non-portable metadata without polluting the common shape.
+
+Recommended capability flags include:
+
+- `supports_developer_role`
+- `requires_explicit_reasoning_disable`
+- `usage_final_only`
+- `tool_call_id_max_length`
+- `tool_call_id_charset`
+- `supports_parallel_tool_calls`
+
+Generic client logic should prefer capability-driven behavior over hardcoded branching on provider names whenever a behavior difference is representable as data.
 
 ### 3. GenerateRequest
 
@@ -588,6 +491,8 @@ Model resolution rules:
 - ambiguous bare model strings must raise a model resolution error rather than silently choosing a provider
 - the recommended external string form is `provider:model`
 - resolution errors should include the candidate providers/models to make correction straightforward
+- registry internals should be keyed by `(provider, model)` even if convenience string helpers are exposed on top
+- public code should prefer explicit lookups such as `get_model(provider, model)` over implicit global resolution when correctness matters
 
 ### StreamHandle
 
@@ -721,6 +626,9 @@ Usage completeness rule:
 
 - some providers emit usage only in the final chunk, while others expose usage earlier in the stream
 - the final response model must distinguish final usage from partial usage and from no usage being available
+- `final` means the provider supplied authoritative end-of-request usage
+- `partial` means some usage was observed, but interruption or provider behavior prevents treating it as final
+- `none` means no trustworthy usage is available
 
 ### How callers detect intermediate and final states
 
@@ -820,6 +728,11 @@ class Usage(BaseModel):
 ```
 
 `completeness` is required because stream interruption may leave usage totals incomplete or absent.
+
+Cost interpretation rule:
+
+- cost is authoritative only when usage completeness is `final`
+- when completeness is `partial`, cost must be surfaced as best-effort only
 
 ## Authentication design
 
@@ -1764,6 +1677,13 @@ Important policy:
 - unsupported reasoning settings should be ignored only if the provider cannot support them cleanly
 - if a user requests strict reasoning behavior, allow a future strict mode that raises instead of silently degrading
 
+Disable semantics:
+
+- `ReasoningConfig(enabled=False)` is the canonical provider-agnostic way to request no reasoning/thinking
+- if a provider requires an explicit native disabled marker, the adapter must send it
+- if a provider treats omission as disabled, omission is acceptable
+- this behavior should be controlled through model/provider capability flags rather than generic hardcoded provider-name checks
+
 ## Tool calling design
 
 ### Tool schema
@@ -1803,6 +1723,11 @@ Define library policy:
 - keep the identifier stable within a provider session so tool results can be correlated correctly
 - provider adapters may normalize or constrain IDs to satisfy provider-native requirements, but must preserve correlation with subsequent tool results in the same session
 
+Streaming assembly rule:
+
+- if a provider emits a tool call without arguments, normalize the arguments to `{}` rather than failing generic assembly
+- if a provider omits an ID, synthesize one that is stable for the lifetime of that response and usable by later tool results in the same session
+
 ### Orphaned tool calls
 
 Before dispatch, validate conversation history:
@@ -1818,6 +1743,20 @@ Implementation note:
 - even in strict mode, provider adapters should have an internal normalization pass that filters structurally invalid empty blocks and other provider-known malformed artifacts that do not change conversation semantics
 - permissive mode may omit orphaned tool calls from the outbound provider transcript rather than inventing synthetic tool results
 - synthetic tool error results should remain an opt-in compatibility feature, not the default repair path
+
+Normalization modes:
+
+- `strict`: raise on invalid semantic history
+- `permissive`: repair provider-rejectable but non-semantic structural issues
+
+Permissive normalization may:
+
+- drop empty text or reasoning blocks
+- omit orphaned tool calls when they would invalidate the next outbound request
+- preserve valid user content, visible assistant text, and valid tool results
+- avoid inventing synthetic semantic content by default
+
+Recommended default: strict semantic validation plus conservative structural normalization before provider serialization.
 
 ## Session continuity rules
 
@@ -1913,6 +1852,36 @@ Required capabilities:
 - override pricing
 - override compatibility flags
 
+Built-in model metadata, including pricing, should be maintained as generated registry data rather than hardcoded ad hoc inside provider adapters.
+
+Recommended maintenance approach:
+
+- keep a checked-in generated model registry used at runtime
+- refresh it with a project script, for example `scripts/generate-models.py`
+- allow that script to pull from external model catalogs and provider model-list endpoints
+- ensure runtime operation does not depend on live pricing fetches
+
+Recommended upstream source for base metadata:
+
+- `https://models.dev/api.json`
+
+Other useful optional sources may include:
+
+- provider-native model listing endpoints
+- aggregator catalogs such as OpenRouter
+- internal curated override files for corrections, aliases, and provider-specific capability flags
+
+The generation pipeline should normalize upstream differences in:
+
+- pricing units
+- cache read/write pricing
+- capability naming
+- modality declarations
+- context and output limits
+- provider/model aliases
+
+Local override files should always win over fetched data so the library can correct bad upstream metadata without waiting for third-party updates.
+
 Example:
 
 ```python
@@ -1961,6 +1930,12 @@ Recommended policy:
 - perform strict semantic validation first
 - then run a conservative structural normalization pass before provider serialization
 - reserve permissive semantic repair for explicit opt-in modes only
+
+Examples of structural normalization that may run even outside permissive semantic repair:
+
+- removing empty content blocks known to trigger provider errors
+- applying provider-safe tool-call ID normalization
+- normalizing missing tool-call argument payloads to `{}`
 
 Pydantic should be the primary mechanism for common validation. Use model validators and field validators for:
 
