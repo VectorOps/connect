@@ -46,22 +46,22 @@ The document is intended to be an implementation specification, not a tutorial.
 5. Message and event models are provider-agnostic, but retain opaque provider metadata needed for same-provider replay.
 6. A chat session is provider-bound. Switching providers starts a new session.
 
-## Recommended implementation stack
+## Implementation stack
 
 Use only small general-purpose Python libraries.
 
 - `httpx` for async HTTP, connection pooling, timeouts, proxies, and streaming
-- optional `websockets` for provider transports that require persistent WebSocket connections
+- `websockets` only when a provider transport requires persistent WebSocket connections
 - `pydantic` for public data models, validation, and serialization
 - Python standard library for JSON, typing, base64, time, hmac/hashlib, and URL handling
 
-Avoid provider SDKs entirely.
+Do not use provider SDKs.
 
-For the first version, the baseline runtime dependency remains `httpx` and `pydantic`. If WebSocket mode is implemented for OpenAI, prefer making `websockets` an optional extra rather than a mandatory dependency for all users. If SSE parsing becomes awkward, implement a tiny internal parser over `response.aiter_lines()` instead of adding a dedicated SSE dependency.
+The baseline runtime dependency set is `httpx` and `pydantic`. If OpenAI WebSocket mode is implemented, `websockets` must be an optional extra rather than a mandatory dependency for all users. SSE parsing must be implemented internally over `response.aiter_lines()` or equivalent. Do not add a dedicated SSE dependency.
 
 ## High-level package structure
 
-Suggested layout:
+Required package layout:
 
 ```text
 src/llmclient/
@@ -99,7 +99,7 @@ Responsibilities:
 - `providers/*`: vendor-specific request/response mappers
 - `registry.py`: provider registration and capability lookup
 
-The first implementation should include concrete provider modules for:
+The first implementation must include concrete provider modules for:
 
 - `openai.py`
 - `chatgpt.py`
@@ -149,7 +149,7 @@ Provider contract requirements:
 - provider code must return enough provider metadata in the final response to support same-provider continuation
 - provider code may retain internal assembly state, but must strip internal-only fields before returning public models
 
-Suggested provider module shape:
+Required provider module shape:
 
 ```python
 class ProviderAdapter(Protocol):
@@ -218,9 +218,10 @@ Modality semantics:
 
 - `supports_images` means the model can accept image inputs in normalized message content
 - `supports_image_outputs` means the model can return normalized assistant image output blocks
-- phase 1 requires image input support and image-bearing tool results; normalized assistant image output is optional and may remain unsupported for most providers
+- phase 1 requires image input support and image-bearing tool results
+- normalized assistant image output is not part of the phase 1 required surface and must be gated behind `supports_image_outputs`
 
-Recommended capability flags include:
+Required capability flags include, at minimum where applicable:
 
 - `supports_developer_role`
 - `requires_explicit_reasoning_disable`
@@ -229,7 +230,7 @@ Recommended capability flags include:
 - `tool_call_id_charset`
 - `supports_parallel_tool_calls`
 
-Generic client logic should prefer capability-driven behavior over hardcoded branching on provider names whenever a behavior difference is representable as data.
+Generic client logic must prefer capability-driven behavior over hardcoded branching on provider names whenever a behavior difference is representable as data.
 
 ### 3. GenerateRequest
 
@@ -256,7 +257,7 @@ This shape is provider-agnostic. Provider-specific request tuning belongs in `Re
 Notes:
 
 - `protocol_hints` is for soft, forward-compatible hints that may influence provider behavior without becoming hard API guarantees.
-- `extension_data` is reserved for future protocol oddities that need request-scoped structured data but should not immediately expand the stable top-level API.
+- `extension_data` is reserved for protocol oddities that need request-scoped structured data without immediately expanding the stable top-level API.
 
 ### 4. RequestOptions
 
@@ -278,7 +279,7 @@ Do not overload `GenerateRequest` with transport concerns.
 
 `transport_options` exists for future wire-level quirks that do not belong in the stable request model, for example WebSocket tuning, SSE parsing hints, or provider-specific connection parameters.
 
-For providers that support multiple transports, the preferred transport should usually be expressed in `provider_options`, for example:
+For providers that support multiple transports, the preferred transport must be expressed in `provider_options`, for example:
 
 - OpenAI: `{"transport": "sse" | "websocket" | "auto"}`
 - ChatGPT: `{"transport": "sse" | "websocket" | "auto"}`
@@ -291,7 +292,7 @@ Use a content-block message model from the start. A plain string-only interface 
 
 Use Pydantic discriminated unions for message and content block types so validation and serialization are explicit and stable.
 
-Recommended public model structure:
+Required public model structure:
 
 ```python
 class TextBlock(BaseModel):
@@ -331,7 +332,7 @@ class ToolCallBlock(BaseModel):
     annotations: list[dict[str, Any]] | dict[str, Any] | None = None
 ```
 
-Recommended message structure:
+Required message structure:
 
 ```python
 class UserMessage(BaseModel):
@@ -387,13 +388,13 @@ Image normalization rules:
 
 Provider metadata is required because some vendors expose opaque identifiers that must be replayed in subsequent turns within the same provider session.
 
-Every message and content block should also support a generic metadata container. At minimum, the internal model should allow:
+Every message and content block must support a generic metadata container. At minimum, the internal model must allow:
 
 - `provider_meta`: opaque provider-specific structured data needed for same-provider replay
-- `protocol_meta`: protocol-level metadata that may be useful for debugging, tracing, or future compatibility
-- `annotations`: optional list or dict for future extensibility without changing the union shape
+- `protocol_meta`: protocol-level metadata used for debugging, tracing, and protocol compatibility
+- `annotations`: optional list or dict reserved for extensibility without changing the union shape
 
-The library should not interpret most of this data generically. It exists so future protocol gotchas do not force immediate breaking changes to the public model.
+The library does not interpret most of this data generically. It exists so protocol gotchas do not force immediate breaking changes to the public model.
 
 ### Message model semantics
 
@@ -583,11 +584,11 @@ class AsyncLLMClient:
         ...
 ```
 
-`generate()` should internally consume `stream()` and return the finalized response.
+`generate()` must internally consume `stream()` and return the finalized response.
 
 ### Convenience helpers
 
-The top-level module should expose:
+The top-level module exposes:
 
 ```python
 async def generate(...)
@@ -602,13 +603,13 @@ Model resolution rules:
 - if the user passes only a bare model string, the client may resolve it only when it is unambiguous in the registry
 - ambiguous bare model strings must raise a model resolution error rather than silently choosing a provider
 - the recommended external string form is `provider:model`
-- resolution errors should include the candidate providers/models to make correction straightforward
-- registry internals should be keyed by `(provider, model)` even if convenience string helpers are exposed on top
-- public code should prefer explicit lookups such as `get_model(provider, model)` over implicit global resolution when correctness matters
+- resolution errors must include the candidate providers/models to make correction straightforward
+- registry internals must be keyed by `(provider, model)` even if convenience string helpers are exposed on top
+- public code must prefer explicit lookups such as `get_model(provider, model)` over implicit global resolution when correctness matters
 
 ### StreamHandle
 
-The stream object should be both an async iterator and a collector.
+The stream object must be both an async iterator and a collector.
 
 ```python
 class StreamHandle(AsyncIterator[StreamEvent]):
@@ -676,7 +677,7 @@ Required event types:
 - `response_end`
 - `error`
 
-Recommended event schemas:
+Required event schemas:
 
 ```python
 class ResponseStartEvent(BaseModel):
@@ -724,15 +725,15 @@ Implementation rules:
 
 - `index` refers to the index in the assembled `AssistantResponse.content`
 - providers may emit `text_start` and then one or more `text_delta` events before `text_end`
-- tool calls should stream raw argument deltas where possible and only parse final JSON once the block is complete
-- if a provider cannot stream a given content type incrementally, it may emit only start/end or only final block events, but must still produce a correct final response
+- tool calls must stream raw argument deltas where possible and parse final JSON only once the block is complete
+- if a provider cannot stream a given content type incrementally, it must still produce a correct final response and may emit only start/end or only final block events
 
 Design notes:
 
 - Streaming text, reasoning, and tool arguments as separate event classes avoids lossy normalization.
 - `usage` may be emitted zero or more times; the final response carries the final normalized totals.
 - `response_end` must include the fully assembled `AssistantResponse`.
-- Provider adapters should never raise mid-stream once iteration has started; they should emit `error` and terminate cleanly.
+- Provider adapters must never raise mid-stream once iteration has started; they must emit `error` and terminate cleanly.
 
 Usage completeness rule:
 
@@ -752,7 +753,7 @@ The stream protocol represents one assistant response in progress.
 
 There is not a separate concept of multiple complete intermediate assistant responses during a single request. Instead, one response is incrementally assembled from events.
 
-If the caller wants a rolling partial view for UI rendering, they should assemble it from stream events.
+If the caller wants a rolling partial view for UI rendering, the caller must assemble it from stream events or use a library-provided partial assembler.
 
 Example partial assembler:
 
@@ -805,9 +806,9 @@ class AssistantResponse(BaseModel):
 
 `response_id` must be surfaced when available. It is valuable for debugging, tracing, and some multi-turn APIs.
 
-`protocol_state` should be reserved for opaque response-scoped state that may need to be carried into later turns for the same provider, such as hidden continuation handles, encrypted reasoning artifacts, upstream message IDs, session cursors, or provider-native replay tokens.
+`protocol_state` is reserved for opaque response-scoped state that must be carried into later turns for the same provider when required, such as hidden continuation handles, encrypted reasoning artifacts, upstream message IDs, session cursors, or provider-native replay tokens.
 
-Recommended additional response fields:
+Required additional response fields:
 
 ```python
 class AssistantResponse(BaseModel):
@@ -823,10 +824,10 @@ class AssistantResponse(BaseModel):
     provider_meta: dict[str, Any] = Field(default_factory=dict)
 ```
 
-- `request_id` should capture any upstream request identifier if available from headers or payloads
-- `api_family` should always be included in the final response so debugging and session replay logic are explicit
+- `request_id` must capture any upstream request identifier if available from headers or payloads
+- `api_family` must always be included in the final response so debugging and session replay logic are explicit
 
-Recommended usage extension:
+Required usage extension:
 
 ```python
 class Usage(BaseModel):
@@ -870,7 +871,7 @@ Built-in strategies:
 
 ### Auth resolution rules
 
-The client should support auth at three levels, highest precedence first:
+The client must support auth at three levels, highest precedence first:
 
 1. per-call `RequestOptions.auth`
 2. provider default auth registered on the client
@@ -878,7 +879,7 @@ The client should support auth at three levels, highest precedence first:
 
 ### Environment helpers
 
-Provide optional helper functions, not hidden magic. Example:
+Provide explicit helper functions. Do not rely on hidden implicit environment resolution. Example:
 
 - `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
@@ -889,7 +890,7 @@ Do not hardwire all auth behavior to environment variables. Users need explicit 
 
 ### OAuth and token refresh
 
-The core library should not own browser-style login flows. It should only support using and refreshing tokens that are already available.
+The core library does not own browser-style login flows. It supports only using and refreshing tokens that are already available.
 
 Required behavior:
 
@@ -900,7 +901,7 @@ Required behavior:
 
 This keeps the core dependency-free with respect to OAuth login UX.
 
-However, the implementation should document the expected token shape and refresh behavior for providers that rely on OAuth-derived bearer tokens.
+The implementation must document the expected token shape and refresh behavior for providers that rely on OAuth-derived bearer tokens.
 
 Anthropic implementation details:
 
@@ -921,7 +922,7 @@ Anthropic localhost callback server workflow:
 5. the local callback handler validates route, checks for provider error parameters, validates `state`, and extracts the authorization `code`
 6. if automatic callback is not received, allow the user to paste either the final redirect URL or the raw code
 7. exchange the code at the token endpoint
-8. persist `access`, `refresh`, and `expires`, ideally with a small pre-expiry safety margin
+8. persist `access`, `refresh`, and `expires` with a small pre-expiry safety margin
 
 ChatGPT/OpenAI subscription implementation details:
 
@@ -946,13 +947,13 @@ ChatGPT/OpenAI localhost callback server workflow:
 9. parse the returned access token as a JWT, extract `chatgpt_account_id`, and fail the flow if that claim is missing
 10. persist `access`, `refresh`, `expires`, and `account_id` for later API use
 
-The core provider library should not implement the interactive browser login flow itself in the first phase, but the auth model should be designed so a companion CLI module can implement these flows without changing provider interfaces.
+The core provider library does not implement the interactive browser login flow in phase 1. The auth model must support a companion CLI module implementing these flows without changing provider interfaces.
 
 ### Vertex note
 
 Vertex AI is a non-goal for the initial implementation.
 
-Do not design the first version around Google service-account JWT minting, Application Default Credentials, or Vertex-specific auth flows. If Vertex is added later, it should be introduced as a separate provider/backend with its own auth design.
+Do not design the first version around Google service-account JWT minting, Application Default Credentials, or Vertex-specific auth flows. If Vertex is added later, it is introduced as a separate provider/backend with its own auth design.
 
 ## Transport layer design
 
@@ -979,20 +980,20 @@ If OpenAI WebSocket mode is enabled, add a third internal transport path:
 
 - WebSocket transport for OpenAI Responses continuation mode
 
-Do not force one decoder abstraction on all providers if the underlying wire format differs. The provider adapter may choose the correct decoder.
+Do not force one decoder abstraction on all providers if the underlying wire format differs. The provider adapter must choose the correct decoder.
 
 ### WebSocket transport
 
-Some providers may offer a persistent WebSocket mode in addition to streamed HTTP. This should be integrated as a transport implementation detail, not as a separate public client API.
+Some providers offer a persistent WebSocket mode in addition to streamed HTTP. This must be integrated as a transport implementation detail, not as a separate public client API.
 
 Design rules:
 
 - the public `generate()` and `stream()` API remains unchanged
 - the provider adapter selects HTTP SSE or WebSocket based on `provider_options`
-- WebSocket support should be optional and provider-specific
+- WebSocket support is provider-specific and optional at install time
 - no generic multiplexing abstraction is required in phase 1
 
-Recommended internal interface:
+Required internal interface:
 
 ```python
 class WebSocketTransport(Protocol):
@@ -1009,7 +1010,7 @@ class WebSocketTransport(Protocol):
         ...
 ```
 
-Providers that do not need WebSockets should not depend on this interface.
+Providers that do not need WebSockets do not depend on this interface.
 
 ### Error classification
 
@@ -1022,9 +1023,9 @@ Define normalized exceptions:
 - `TransientProviderError`
 - `PermanentProviderError`
 
-Providers should map HTTP status codes and known vendor error payloads into these exceptions.
+Providers must map HTTP status codes and known vendor error payloads into these exceptions.
 
-Recommended error payload shape:
+Required error payload shape:
 
 ```python
 class ErrorInfo(BaseModel):
@@ -1059,20 +1060,20 @@ The initial implementation target is:
 - Gemini API
 - OpenRouter
 
-The architecture should still leave room for nearby provider families that are operationally important:
+The architecture leaves room for nearby provider families that are operationally important:
 
-- ChatGPT subscription-backed Codex access should live under the ChatGPT provider, not as a separate top-level provider family from ChatGPT itself
-- OpenRouter should be treated as an OpenAI-compatible aggregator/provider
-- Google Gemini CLI and Antigravity should be understood as Google OAuth-backed alternate Gemini-family backends, but they are not required in phase 1
-- Amazon Bedrock should be treated as a future provider/backend, not part of the first implementation slice
+- ChatGPT subscription-backed Codex access lives under the ChatGPT provider, not as a separate top-level provider family from ChatGPT itself
+- OpenRouter is treated as an OpenAI-compatible aggregator/provider
+- Google Gemini CLI and Antigravity are Google OAuth-backed alternate Gemini-family backends and are not required in phase 1
+- Amazon Bedrock is a future provider/backend and is not part of the first implementation slice
 
 ## OpenAI provider
 
-### Recommended primary API
+### Primary API
 
 Use the OpenAI Responses API as the primary OpenAI integration. It has the most future-proof surface for reasoning, tool calls, multimodality, and response metadata.
 
-Keep a provider-internal compatibility layer so an OpenAI-compatible endpoint could later use Chat Completions where required, but the public API should not expose two separate OpenAI integrations unless there is a strong need.
+Keep a provider-internal compatibility layer so an OpenAI-compatible endpoint can later use Chat Completions where required, but the public API does not expose two separate OpenAI integrations in phase 1.
 
 ### OpenAI auth
 
@@ -1081,7 +1082,7 @@ Primary auth modes:
 - API key via `Authorization: Bearer <token>`
 - OAuth bearer token via the same header
 
-The transport should not care whether a bearer token came from a static key or an OAuth refresh flow.
+The transport does not care whether a bearer token came from a static key or an OAuth refresh flow.
 
 ### OpenAI request mapping
 
@@ -1113,7 +1114,7 @@ Concrete request shape for initial implementation:
 - usage:
   - parse prompt, completion, cached, and total token counts when present
 
-OpenAI-specific provider options should include:
+OpenAI-specific provider options are:
 
 - `transport`: `"sse" | "websocket" | "auto"`
 - `generate`: `bool | None`
@@ -1132,7 +1133,7 @@ Concrete implementation rules:
 
 ### OpenAI WebSocket mode integration
 
-OpenAI Responses WebSocket mode should be modeled as an alternate transport for the OpenAI provider, not as a separate provider.
+OpenAI Responses WebSocket mode is modeled as an alternate transport for the OpenAI provider, not as a separate provider.
 
 Why it fits the existing design:
 
@@ -1141,18 +1142,18 @@ Why it fits the existing design:
 - continuation still uses `previous_response_id`
 - the main difference is transport and connection-local continuation state
 
-Recommended design:
+Implementation requirements:
 
 - keep `openai` as one provider adapter
 - select SSE or WebSocket using `provider_options["transport"]`
 - keep the normalized event stream identical regardless of transport
 - preserve response IDs and continuation hints in `AssistantResponse.response_id` and `AssistantResponse.protocol_state`
 
-Recommended OpenAI transport values:
+OpenAI transport values:
 
 - `"sse"`: use standard HTTP streaming
 - `"websocket"`: require a persistent WebSocket connection
-- `"auto"`: provider may choose WebSocket only when the request pattern benefits from it and the runtime supports it
+- `"auto"`: the provider selects WebSocket only when the runtime supports it and the request pattern benefits from persistent continuation
 
 #### Connection model
 
@@ -1163,9 +1164,9 @@ Library implications:
 - treat one OpenAI WebSocket connection as a sequential provider session
 - no multiplexing support is required
 - use multiple connections if the caller needs parallel OpenAI runs
-- the connection lifetime limit should be treated as provider behavior and surfaced through reconnect logic
+- the connection lifetime limit must be treated as provider behavior and surfaced through reconnect logic
 
-Recommended internal session object:
+Required internal session object:
 
 ```python
 class ProviderSession(Protocol):
@@ -1178,7 +1179,7 @@ class ProviderSession(Protocol):
         ...
 ```
 
-For most providers, sessions may be thin wrappers over stateless HTTP execution. For OpenAI WebSocket mode, the session owns the persistent socket.
+For most providers, sessions are thin wrappers over stateless HTTP execution. For OpenAI WebSocket mode, the session owns the persistent socket.
 
 #### Continuation model
 
@@ -1187,14 +1188,14 @@ OpenAI WebSocket mode continues a run by sending only incremental input plus `pr
 Map this into the library as follows:
 
 - `AssistantResponse.response_id` stores the OpenAI response ID
-- `AssistantResponse.protocol_state` may also store provider-private transport details such as `{"previous_response_id": "resp_123"}`
-- `SessionHints.continue_from` or `provider_options["previous_response_id"]` may be used to force explicit continuation from a prior response
+- `AssistantResponse.protocol_state` stores provider-private transport details such as `{"previous_response_id": "resp_123"}` when they are required for same-provider continuation
+- `SessionHints.continue_from` or `provider_options["previous_response_id"]` forces explicit continuation from a prior response
 
 Provider behavior:
 
-- if a caller is using an active OpenAI WebSocket session and does not override continuation, the provider may continue from the most recent response automatically using the last known `response_id`
+- if a caller is using an active OpenAI WebSocket session and does not override continuation, the provider continues from the most recent response automatically using the last known `response_id`
 - if the caller explicitly provides `previous_response_id`, that value wins
-- if the connection-local cache can no longer satisfy the requested continuation, the provider should surface `previous_response_not_found` as a structured provider error
+- if the connection-local cache can no longer satisfy the requested continuation, the provider must surface `previous_response_not_found` as a structured provider error
 
 This keeps continuation provider-bound while still using the same public request and response model.
 
@@ -1202,11 +1203,11 @@ This keeps continuation provider-bound while still using the same public request
 
 The generic library API is transcript-oriented, but OpenAI WebSocket mode is optimized for incremental inputs.
 
-Recommended adapter behavior:
+Adapter behavior requirements:
 
-- same-provider WebSocket continuation may serialize only newly added input items plus `previous_response_id`
-- if the provider cannot safely compute the incremental delta from prior session state, it should fall back to regular HTTP/SSE-style full request serialization
-- callers should not be required to manually construct incremental deltas for correctness
+- same-provider WebSocket continuation serializes only newly added input items plus `previous_response_id`
+- if the provider cannot safely compute the incremental delta from prior session state, it must fall back to regular HTTP/SSE-style full request serialization
+- callers must not be required to manually construct incremental deltas for correctness
 
 This means the optimization is provider-owned. The public API remains stable.
 
@@ -1220,7 +1221,7 @@ Map this to provider options:
 
 Rules:
 
-- a warmup request should still return a provider response object if the provider supplies a response ID
+- a warmup request still returns a provider response object if the provider supplies a response ID
 - the resulting `response_id` may be used as the continuation base for the next generated turn
 - `generate=false` is OpenAI-specific and must not become a common top-level request field
 
@@ -1244,24 +1245,24 @@ Required behavior:
 - on reconnect, if continuation is still valid through persisted `previous_response_id`, the provider may continue the chain
 - if continuation is not available, the provider must require a new chain or a full new context
 
-Recommended error mapping:
+Error mapping requirements:
 
 - `previous_response_not_found` -> `ProviderProtocolError` or `PermanentProviderError` depending on retryability context
 - `websocket_connection_limit_reached` -> reconnect-required provider error, typically retryable after opening a new socket
 
 #### Compaction support
 
-OpenAI compaction should be treated as provider-specific continuation management.
+OpenAI compaction is treated as provider-specific continuation management.
 
 Rules:
 
 - server-side compaction through normal response generation is transparent to the generic API
-- standalone compaction that returns a new compacted window should start a new response chain
-- compacted windows are provider-native payload fragments and should remain in `protocol_state` or provider-internal handling, not become first-class common message types
+- standalone compaction that returns a new compacted window starts a new response chain
+- compacted windows are provider-native payload fragments and remain in `protocol_state` or provider-internal handling, not first-class common message types
 
 #### When to choose WebSocket mode
 
-The provider should prefer WebSocket mode only when it materially improves latency, typically in long-running tool-heavy loops.
+The provider uses WebSocket mode only when it materially improves latency, typically in long-running tool-heavy loops.
 
 Good candidates:
 
@@ -1280,7 +1281,7 @@ HTTP SSE remains the simpler default for one-shot or short exchanges.
    They only need to be stable within the same provider session.
 
 3. Some OpenAI-compatible servers do not support the `developer` role or advanced reasoning fields.
-   Compatibility flags should exist on `ModelSpec.extra` or provider config.
+   Compatibility flags must exist on `ModelSpec.extra` or provider config.
 
 4. Some endpoints expose cached token counts separately.
    Usage normalization must avoid double-counting cached tokens in total input.
@@ -1289,7 +1290,7 @@ HTTP SSE remains the simpler default for one-shot or short exchanges.
    Cost tracking must allow a pricing multiplier or explicit override.
 
 6. `store` and other request fields are not universally accepted by compatible proxies.
-   Provider options should allow disabling incompatible fields without changing the common API.
+   Provider options must allow disabling incompatible fields without changing the common API.
 
 7. Reasoning-capable OpenAI-family models may prefer `developer` instructions, while some compatible endpoints only accept `system`.
    This must be driven by compatibility flags on the model or provider configuration, not hardcoded per provider name.
@@ -1307,25 +1308,25 @@ HTTP SSE remains the simpler default for one-shot or short exchanges.
 
 OpenAI-compatible implementation details:
 
-- OpenRouter may reuse this adapter with provider-specific compatibility flags
-- provider compatibility should be driven by `ModelSpec.capabilities`, `ModelSpec.protocol_defaults`, and `RequestOptions.provider_options`
-- fields that differ across compatible providers, such as developer-role support, reasoning-field names, or routing payloads, should be isolated in compatibility helpers rather than forked provider logic where possible
+- OpenRouter reuses this adapter with provider-specific compatibility flags
+- provider compatibility is driven by `ModelSpec.capabilities`, `ModelSpec.protocol_defaults`, and `RequestOptions.provider_options`
+- fields that differ across compatible providers, such as developer-role support, reasoning-field names, or routing payloads, must be isolated in compatibility helpers rather than forked provider logic where possible
 
 ## ChatGPT subscription provider
 
-The design should treat ChatGPT subscription-backed access as a separate provider from direct OpenAI API access, even if both ultimately expose a Responses-like protocol.
+The implementation treats ChatGPT subscription-backed access as a separate provider from direct OpenAI API access, even if both ultimately expose a Responses-like protocol.
 
-Recommended provider name:
+Provider name:
 
 - `chatgpt`
 
-Recommended API family:
+API family:
 
 - `chatgpt-responses`
 
 Codex placement:
 
-- Codex should be modeled as ChatGPT-backed model access within this provider, not as a completely separate provider family
+- Codex is modeled as ChatGPT-backed model access within this provider, not as a completely separate provider family
 - implementation-wise, Codex is a model/backend variant exposed by the ChatGPT subscription surface
 - if the codebase needs naming distinction, prefer model metadata or a ChatGPT sub-family marker rather than a separate top-level provider abstraction
 
@@ -1338,9 +1339,9 @@ Although the request and event shapes are close to OpenAI Responses, ChatGPT sub
 - it uses a different base URL and backend namespace
 - it is authenticated with ChatGPT OAuth access tokens rather than OpenAI API keys
 - requests require additional account-scoped headers
-- it may support both SSE and WebSocket transports
+- it supports SSE and may support WebSocket transport
 - it relies on session identifiers for connection reuse and prompt caching behavior
-- it returns subscription- and usage-limit-specific errors that should be surfaced differently from standard OpenAI API errors
+- it returns subscription- and usage-limit-specific errors that are surfaced differently from standard OpenAI API errors
 
 For implementation clarity, reuse shared OpenAI Responses message conversion and event processing where possible, but keep ChatGPT as a dedicated provider adapter.
 
@@ -1360,14 +1361,14 @@ Implementation requirement:
 - the provider adapter must decode the JWT payload and extract `chatgpt_account_id`
 - if account ID extraction fails, fail before issuing the request
 
-Recommended auth model addition:
+Required auth model addition:
 
 ```python
 class ChatGPTAccessTokenAuth(BearerTokenAuth):
     account_id: str
 ```
 
-The account ID may either be supplied explicitly by a higher-level auth helper or lazily derived by the provider from the token. If derived by the provider, the extracted value should be cached per token.
+The account ID is either supplied explicitly by a higher-level auth helper or lazily derived by the provider from the token. If derived by the provider, the extracted value must be cached per token.
 
 Implementation details for the companion auth flow:
 
@@ -1387,30 +1388,30 @@ Use a provider-specific base URL, for example:
 
 - `https://chatgpt.com/backend-api`
 
-The concrete streaming endpoint should be treated as provider-specific, such as a `codex/responses`-style path under the ChatGPT backend namespace.
+The concrete streaming endpoint is provider-specific, such as a `codex/responses`-style path under the ChatGPT backend namespace.
 
 Do not route ChatGPT traffic through the standard `api.openai.com` OpenAI provider.
 
-In practice, Codex models should use this same ChatGPT backend family and inherit the same OAuth, account-header, session, and transport behavior.
+Codex models use this same ChatGPT backend family and inherit the same OAuth, account-header, session, and transport behavior.
 
 Concrete HTTP behavior:
 
-- endpoint family should be modeled as a ChatGPT backend path under the configured base URL
+- endpoint family is modeled as a ChatGPT backend path under the configured base URL
 - request auth uses bearer token plus account-scoped header
-- request body should carry top-level instructions, input messages, tool configuration, session hint, and reasoning controls
-- request body should remain close to Responses-style semantics to maximize shared parsing code
+- request body carries top-level instructions, input messages, tool configuration, session hint, and reasoning controls
+- request body remains close to Responses-style semantics to maximize shared parsing code
 
 ### ChatGPT request mapping
 
 ChatGPT request construction is similar to OpenAI Responses with these notable differences:
 
-- system prompt should be sent as top-level instructions rather than injected into the input list
-- session ID should be passed through for cache/session affinity
+- system prompt is sent as top-level instructions rather than injected into the input list
+- session ID is passed through for cache/session affinity
 - include encrypted reasoning content when supported so same-provider replay remains possible
 - enable tool choice and parallel tool calls by default when tools are present
-- text verbosity may be a provider-specific option separate from the generic API
+- text verbosity is a provider-specific option separate from the generic API
 
-Suggested ChatGPT-specific provider options:
+ChatGPT-specific provider options:
 
 - `transport`: `"sse" | "websocket" | "auto"`
 - `session_id`: string
@@ -1447,7 +1448,7 @@ Design rule:
 
 ### ChatGPT error handling
 
-ChatGPT error handling should differ from standard OpenAI API handling.
+ChatGPT error handling differs from standard OpenAI API handling.
 
 Required behavior:
 
@@ -1456,7 +1457,7 @@ Required behavior:
 - classify these as `RateLimitError` or `AuthenticationError` as appropriate
 - use retry with backoff for transient 429 and 5xx failures before stream start
 
-Recommended retry policy for ChatGPT only:
+Retry policy for ChatGPT:
 
 - retry network failures and transient 429/5xx responses before first stream byte
 - do not retry after stream processing has begun
@@ -1466,7 +1467,7 @@ This is stricter than the generic default because the subscription-backed backen
 
 ### ChatGPT prompt caching and sessions
 
-ChatGPT should use `session_id` as a first-class session hint.
+ChatGPT uses `session_id` as a first-class session hint.
 
 Implementation guidance:
 
@@ -1476,7 +1477,7 @@ Implementation guidance:
 
 ### ChatGPT reasoning behavior
 
-ChatGPT should share the unified reasoning model with OpenAI Responses, but the adapter may need additional clamping or remapping for model-specific effort values.
+ChatGPT shares the unified reasoning model with OpenAI Responses, and the adapter may require additional clamping or remapping for model-specific effort values.
 
 Implementation guidance:
 
@@ -1523,17 +1524,17 @@ Key differences from the direct OpenAI provider:
    ChatGPT can return subscription-plan and usage-limit errors tied to the interactive product; OpenAI API errors are more conventional API quota/auth errors.
 
 8. Provider boundary
-   ChatGPT should be implemented as a sibling of the OpenAI provider, not as a mode flag inside it.
+   ChatGPT is implemented as a sibling of the OpenAI provider, not as a mode flag inside it.
 
 ## OpenRouter provider
 
-OpenRouter should be treated as a separate provider name built on an OpenAI-compatible wire protocol.
+OpenRouter is treated as a separate provider name built on an OpenAI-compatible wire protocol.
 
-Recommended provider name:
+Provider name:
 
 - `openrouter`
 
-Recommended API family:
+API family:
 
 - `openai-responses` or `openai-completions`, depending on the implemented backend surface
 
@@ -1541,7 +1542,7 @@ Design notes:
 
 - auth is typically static API key bearer auth
 - the model namespace is aggregator-style and may encode upstream vendor/model identity in the model ID
-- OpenRouter-specific routing or provider-preference options should remain in `provider_options`
+- OpenRouter-specific routing or provider-preference options remain in `provider_options`
 - some pricing, usage, and reasoning behavior may reflect the upstream routed provider rather than a uniform OpenRouter-native contract
 
 Implementation guidance:
@@ -1576,7 +1577,7 @@ Antigravity:
 
 Design implication:
 
-- these should not be folded into the direct `gemini` provider
+- these are not folded into the direct `gemini` provider
 - if implemented later, treat them as separate providers or separate Google-hosted backends with their own auth and header logic
 - they may still reuse parts of Gemini-style content conversion, especially where the backend shape is close to Google's content-part model
 
@@ -1584,7 +1585,7 @@ For the current project, both Gemini CLI and Antigravity are out of scope for ph
 
 ## Amazon Bedrock
 
-Amazon Bedrock should be treated as a future backend/provider, not part of the initial implementation target.
+Amazon Bedrock is a future backend/provider and is not part of the initial implementation target.
 
 Design notes:
 
@@ -1596,7 +1597,7 @@ Design notes:
 Implementation implication:
 
 - do not shape the initial provider abstractions around Bedrock-specific signing requirements
-- if added later, Bedrock should be introduced as its own provider/backend with a dedicated auth and transport path
+- if added later, Bedrock is introduced as its own provider/backend with a dedicated auth and transport path
 - same-provider session continuity rules would still apply at the Bedrock-provider level
 
 ## Anthropic provider
@@ -1610,7 +1611,7 @@ Primary auth modes:
 
 Anthropic also requires version headers. The provider must own those defaults.
 
-For initial implementation purposes, Anthropic should cover both:
+Anthropic covers both:
 
 - direct API-key access
 - subscription-backed OAuth access
@@ -1627,11 +1628,11 @@ Implementation details for Anthropic OAuth support:
 
 Concrete OAuth server behavior:
 
-- the localhost callback server should bind before opening the browser to avoid race conditions
-- the callback route should explicitly validate path, `state`, and required query parameters
-- provider-declared error query parameters should be converted into user-facing auth failures
-- when loopback bind fails, the flow should degrade to manual paste rather than abort immediately
-- refresh logic should be shared with non-interactive auth helpers so the provider path only receives a valid access token
+- the localhost callback server binds before opening the browser to avoid race conditions
+- the callback route explicitly validates path, `state`, and required query parameters
+- provider-declared error query parameters are converted into user-facing auth failures
+- when loopback bind fails, the flow degrades to manual paste rather than aborting immediately
+- refresh logic is shared with non-interactive auth helpers so the provider path only receives a valid access token
 
 ### Anthropic request mapping
 
@@ -1655,11 +1656,11 @@ Concrete request shape for initial implementation:
 - required provider headers:
   - Anthropic version header
   - optional beta headers when specific capabilities are needed
-- system prompt should be sent via top-level system field
-- messages should be sent in Anthropic message format with content blocks
-- tools should be mapped to Anthropic tool definitions
-- thinking config should be translated from the unified reasoning model
-- cache-control hints should be attached only where supported and useful
+- system prompt is sent via top-level system field
+- messages are sent in Anthropic message format with content blocks
+- tools are mapped to Anthropic tool definitions
+- thinking config is translated from the unified reasoning model
+- cache-control hints are attached only where supported and useful
 
 Concrete implementation rules:
 
@@ -1673,13 +1674,13 @@ Concrete implementation rules:
 ### Anthropic gotchas
 
 1. Tool call IDs are provider-constrained.
-   The adapter should generate or validate IDs that satisfy Anthropic requirements for Anthropic sessions.
+   The adapter generates or validates IDs that satisfy Anthropic requirements for Anthropic sessions.
 
 2. Thinking content may be interleaved with visible answer content.
    The stream protocol must preserve reasoning blocks separately.
 
 3. Some thinking modes are adaptive rather than strictly token-budgeted.
-   The unified API should expose a generic reasoning config and let the provider translate it.
+   The unified API exposes a generic reasoning config and the provider translates it.
 
 4. Prompt caching is exposed differently than OpenAI.
    Anthropic cache control attaches to message or content segments rather than a generic cache key.
@@ -1688,10 +1689,10 @@ Concrete implementation rules:
    These must stay inside the provider implementation.
 
 6. Tool result ordering matters.
-   A tool call without a corresponding tool result can invalidate later replay. The library should validate or repair incomplete history before sending.
+   A tool call without a corresponding tool result can invalidate later replay. The library validates or repairs incomplete history before sending.
 
 7. Empty content blocks may trigger provider errors.
-   The adapter should aggressively filter empty text and empty reasoning blocks.
+   The adapter aggressively filters empty text and empty reasoning blocks.
 
 8. Disabling reasoning may require an explicit provider-native disabled value.
    For models that default to thinking behavior, omitting the thinking field is not sufficient.
@@ -1706,7 +1707,7 @@ Concrete implementation rules:
 
 ## Gemini provider
 
-The initial design should target the direct Gemini API only.
+The initial design targets the direct Gemini API only.
 
 ### Gemini auth
 
@@ -1756,16 +1757,16 @@ Concrete implementation rules:
    Preserve them as separate block types.
 
 3. Gemini thought signatures are provider-specific replay artifacts.
-   They should only be replayed back to compatible Gemini requests in the same provider session.
+   They are replayed back only to compatible Gemini requests in the same provider session.
 
 4. Function calls may not always carry stable IDs.
    The adapter must synthesize deterministic IDs when absent.
 
 5. Older Gemini variants and some backends may not support multimodal tool results the same way newer variants do.
-   The adapter should be conservative when replaying tool outputs with images.
+   The adapter is conservative when replaying tool outputs with images.
 
 6. Google tool schemas can be stricter than generic JSON Schema in practice.
-   The public tool schema format should stay simple and serializable.
+   The public tool schema format stays simple and serializable.
 
 7. Thought signatures are not portable.
    Reuse only within the same provider family and model line where supported.
@@ -1798,15 +1799,15 @@ Provider mapping:
 Important policy:
 
 - reasoning is best-effort
-- unsupported reasoning settings should be ignored only if the provider cannot support them cleanly
+- unsupported reasoning settings are ignored only if the provider cannot support them cleanly
 - if a user requests strict reasoning behavior, allow a future strict mode that raises instead of silently degrading
 
 Disable semantics:
 
 - `ReasoningConfig(enabled=False)` is the canonical provider-agnostic way to request no reasoning/thinking
 - if a provider requires an explicit native disabled marker, the adapter must send it
-- if a provider treats omission as disabled, omission is acceptable
-- this behavior should be controlled through model/provider capability flags rather than generic hardcoded provider-name checks
+- if a provider treats omission as disabled, omission is used
+- this behavior is controlled through model/provider capability flags rather than generic hardcoded provider-name checks
 
 ## Tool calling design
 
@@ -1864,9 +1865,9 @@ Default recommendation: raise by default, permissive repair as an opt-in compati
 
 Implementation note:
 
-- even in strict mode, provider adapters should have an internal normalization pass that filters structurally invalid empty blocks and other provider-known malformed artifacts that do not change conversation semantics
+- even in strict mode, provider adapters have an internal normalization pass that filters structurally invalid empty blocks and other provider-known malformed artifacts that do not change conversation semantics
 - permissive mode may omit orphaned tool calls from the outbound provider transcript rather than inventing synthetic tool results
-- synthetic tool error results should remain an opt-in compatibility feature, not the default repair path
+- synthetic tool error results remain an opt-in compatibility feature, not the default repair path
 
 Normalization modes:
 
@@ -1880,7 +1881,7 @@ Permissive normalization may:
 - preserve valid user content, visible assistant text, and valid tool results
 - avoid inventing synthetic semantic content by default
 
-Recommended default: strict semantic validation plus conservative structural normalization before provider serialization.
+Default behavior: perform strict semantic validation plus conservative structural normalization before provider serialization.
 
 ## Session continuity rules
 
@@ -1899,7 +1900,7 @@ This simplifies the implementation substantially:
 - no cross-provider replay policy matrix is required
 - provider adapters only need to support same-provider continuation
 
-Within the same provider, replay may preserve:
+Within the same provider, replay preserves:
 
 - response IDs
 - reasoning signatures
@@ -1954,11 +1955,11 @@ class CostBreakdown(BaseModel):
 
 Additional rule:
 
-- if usage completeness is `partial`, cost should be treated as partial as well and surfaced as best-effort rather than authoritative
+- if usage completeness is `partial`, cost is treated as partial as well and surfaced as best-effort rather than authoritative
 
 ### Session aggregation
 
-Provide helper utilities:
+The implementation provides helper utilities:
 
 - `accumulate_usage(existing, new)`
 - `estimate_cost(model, usage)`
@@ -1966,7 +1967,7 @@ Provide helper utilities:
 
 ## Model registry design
 
-The registry should be data-driven.
+The registry is data-driven.
 
 Required capabilities:
 
@@ -1976,16 +1977,16 @@ Required capabilities:
 - override pricing
 - override compatibility flags
 
-Built-in model metadata, including pricing, should be maintained as generated registry data rather than hardcoded ad hoc inside provider adapters.
+Built-in model metadata, including pricing, is maintained as generated registry data rather than hardcoded ad hoc inside provider adapters.
 
-Recommended maintenance approach:
+Registry maintenance requirements:
 
 - keep a checked-in generated model registry used at runtime
 - refresh it with a project script, for example `scripts/generate-models.py`
 - allow that script to pull from external model catalogs and provider model-list endpoints
 - ensure runtime operation does not depend on live pricing fetches
 
-Recommended upstream source for base metadata:
+Required upstream source for base metadata:
 
 - `https://models.dev/api.json`
 
@@ -1995,7 +1996,7 @@ Other useful optional sources may include:
 - aggregator catalogs such as OpenRouter
 - internal curated override files for corrections, aliases, and provider-specific capability flags
 
-The generation pipeline should normalize upstream differences in:
+The generation pipeline normalizes upstream differences in:
 
 - pricing units
 - cache read/write pricing
@@ -2004,7 +2005,7 @@ The generation pipeline should normalize upstream differences in:
 - context and output limits
 - provider/model aliases
 
-Local override files should always win over fetched data so the library can correct bad upstream metadata without waiting for third-party updates.
+Local override files always win over fetched data so the library can correct bad upstream metadata without waiting for third-party updates.
 
 Example:
 
@@ -2024,7 +2025,7 @@ registry.register(
 
 ## Provider-specific option bags
 
-The common API should remain narrow. Provider extras go through `provider_options`.
+The common API remains narrow. Provider extras go through `provider_options`.
 
 Examples:
 
@@ -2042,14 +2043,14 @@ Validate before network I/O:
 - tool result references must match a preceding tool call
 - image blocks must include mime type and data
 - response format requests must be compatible with the target model
-- unsupported modalities should fail early
+- unsupported modalities fail early
 
-Validation should happen in two stages:
+Validation happens in two stages:
 
 - common validation in client layer
 - provider validation inside adapter for vendor-specific constraints
 
-Recommended policy:
+Validation policy:
 
 - perform strict semantic validation first
 - then run a conservative structural normalization pass before provider serialization
@@ -2064,25 +2065,25 @@ Examples of structural normalization that may run even outside permissive semant
 Image validation rules:
 
 - image blocks must include both `mime_type` and non-empty base64 `data`
-- only image media types supported by the target provider should be accepted
+- only image media types supported by the target provider are accepted
 - mixed text and image block ordering must be preserved during serialization
-- if the target model does not support image input, validation should fail early rather than silently dropping image blocks
+- if the target model does not support image input, validation fails early rather than silently dropping image blocks
 - tool result images must be preserved when the target provider supports vision-capable tool-result replay
 
-Pydantic should be the primary mechanism for common validation. Use model validators and field validators for:
+Pydantic is the primary mechanism for common validation. Use model validators and field validators for:
 
 - message/content union discrimination
 - token and temperature range checks
 - tool schema shape checks
 - provider option normalization where safe
 
-Provider adapters should still perform vendor-specific validation that cannot be expressed cleanly at the shared model layer.
+Provider adapters still perform vendor-specific validation that cannot be expressed cleanly at the shared model layer.
 
 ## Pydantic guidance
 
 Use Pydantic for all public request and response models.
 
-Recommended rules:
+Required rules:
 
 - public surface models inherit from `BaseModel`
 - immutable registry metadata uses `ConfigDict(frozen=True)`
@@ -2091,7 +2092,7 @@ Recommended rules:
 - serialization uses `model_dump()` and `model_dump_json()`
 - parsing from persisted conversation state uses `model_validate()` and `model_validate_json()`
 
-Keep internal hot-path streaming assemblers free to use plain dicts or lightweight internal objects if profiling ever shows Pydantic overhead in token-by-token assembly. The finalized public objects returned to callers should still be Pydantic models.
+Internal hot-path streaming assemblers may use plain dicts or lightweight internal objects if profiling shows Pydantic overhead in token-by-token assembly. The finalized public objects returned to callers remain Pydantic models.
 
 ## Retry and cancellation
 
@@ -2103,7 +2104,7 @@ Rely on task cancellation plus `httpx` stream closure. Ensure provider streams s
 
 Do not retry streaming requests automatically by default. Streaming retries are often not safe.
 
-It is acceptable to add a future retry helper for:
+A future retry helper may be added only for:
 
 - connection errors before first byte
 - 429 and 5xx for non-streaming requests
@@ -2129,14 +2130,14 @@ These can be callbacks or a simple event sink. Do not add a logging framework de
 
 ## Compatibility and extensibility
 
-The design should support future providers if they can map onto the common abstractions:
+The design supports future providers if they can map onto the common abstractions:
 
 - OpenAI-compatible endpoints
 - Azure-hosted OpenAI-style APIs
 - Bedrock-hosted vendor models
 - local model servers
 
-However, the common model should be driven by the initial three providers, not by every edge case from day one.
+The common model is driven by the initial three providers, not by every edge case from day one.
 
 ## Minimal implementation plan
 
@@ -2168,14 +2169,14 @@ Phase 3:
 - richer JSON mode support
 - optional extras for advanced auth flows
 
-## Recommended defaults
+## Required implementation defaults
 
-- Use `httpx.AsyncClient` with connection pooling and a reusable client instance.
-- Prefer streaming APIs for all providers.
-- Use OpenAI Responses, ChatGPT/Codex subscription-backed access, Anthropic Messages, Gemini generateContent, and OpenRouter as the first-class initial provider set.
-- Keep provider-native replay metadata only within the same provider session.
-- Keep auth pluggable and request-scoped.
-- Track cost in the model registry, not in provider adapters.
+- The implementation uses `httpx.AsyncClient` with connection pooling and a reusable client instance.
+- The implementation prefers streaming APIs for all providers.
+- The implementation uses OpenAI Responses, ChatGPT/Codex subscription-backed access, Anthropic Messages, Gemini generateContent, and OpenRouter as the first-class initial provider set.
+- The implementation keeps provider-native replay metadata only within the same provider session.
+- The implementation keeps auth pluggable and request-scoped.
+- The implementation tracks cost in the model registry, not in provider adapters.
 
 ## Final recommendation
 
@@ -2189,3 +2190,32 @@ Implement the library as a small layered system:
 
 This structure is sufficient for the initial provider set without vendor SDKs, and it leaves room for future compatible providers without forcing major API redesign.
 For phase 1, that specifically means OpenAI API, OpenAI Codex via ChatGPT subscription, Anthropic API, Anthropic subscription access, Gemini API, and OpenRouter.
+
+
+## Deferred and unresolved items
+
+This section categorizes items that are intentionally deferred, implementation-defined, or pending future expansion. These items are not part of the phase 1 required behavior unless explicitly stated elsewhere.
+
+### Deferred to a later phase
+
+- normalized assistant-generated image output
+- Vertex AI support
+- Amazon Bedrock support
+- custom compatible endpoint families beyond the initial provider set
+- richer JSON mode beyond the required structured-output support described in this document
+- interactive OAuth login UX in the core package
+
+### Provider-specific and implementation-defined
+
+- the exact OpenAI WebSocket `auto` transport selection heuristic
+- internal connection pooling and reuse strategy for provider sessions
+- the exact storage format of generated model registry metadata
+- the exact local override file format used by model registry generation
+
+### Must be clarified during implementation if encountered
+
+- provider-native image MIME subtype restrictions not documented in upstream APIs
+- provider-native limits for image size, count, or combined multimodal payload size
+- any provider response shape that introduces new opaque replay artifacts not representable by current `provider_meta` or `protocol_state`
+
+When an unresolved behavior is encountered during implementation, the implementation must preserve correctness first, document the issue, and add the provider-specific handling to this specification before broadening the public API.
