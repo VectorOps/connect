@@ -194,6 +194,7 @@ class ModelSpec(BaseModel):
     supports_tools: bool = True
     supports_reasoning: bool = False
     supports_images: bool = False
+    supports_image_outputs: bool = False
     supports_json_mode: bool = False
     supports_prompt_caching: bool = False
     context_window: int | None = None
@@ -212,6 +213,12 @@ Notes:
 - `capabilities` stores protocol and model feature flags that do not justify dedicated top-level fields.
 - `protocol_defaults` stores provider-specific default knobs that may need to be merged into requests.
 - `extra` stores non-portable metadata without polluting the common shape.
+
+Modality semantics:
+
+- `supports_images` means the model can accept image inputs in normalized message content
+- `supports_image_outputs` means the model can return normalized assistant image output blocks
+- phase 1 requires image input support and image-bearing tool results; normalized assistant image output is optional and may remain unsupported for most providers
 
 Recommended capability flags include:
 
@@ -364,6 +371,20 @@ Content blocks:
 - `ReasoningBlock(text: str, signature: str | None = None, redacted: bool = False)`
 - `ToolCallBlock(id: str, name: str, arguments: dict[str, Any], provider_meta={})`
 
+Image normalization rules:
+
+- `ImageBlock.data` is normalized as base64-encoded image bytes without a `data:` URL prefix
+- `ImageBlock.mime_type` is required and must be an explicit image media type such as `image/png` or `image/jpeg`
+- mixed text and image ordering inside a message is significant and must be preserved during normalization and provider serialization
+- provider adapters are responsible for converting normalized image blocks into provider-native formats such as inline parts or data URLs
+
+Image normalization rules:
+
+- `ImageBlock.data` is normalized as base64-encoded image bytes without the `data:` URL prefix
+- `ImageBlock.mime_type` is required and must be an explicit media type such as `image/png` or `image/jpeg`
+- message content order is preserved exactly, so mixed text and image blocks remain in caller-specified order
+- provider adapters are responsible for converting normalized images into provider-native wire representations such as inline base64 parts, data URLs, or provider content parts
+
 Provider metadata is required because some vendors expose opaque identifiers that must be replayed in subsequent turns within the same provider session.
 
 Every message and content block should also support a generic metadata container. At minimum, the internal model should allow:
@@ -433,6 +454,97 @@ In this example:
 - the second assistant message provided the visible answer after receiving the tool result
 
 Only completed assistant turns belong in the persisted transcript. In-progress token deltas do not.
+
+### Image inputs and outputs
+
+Phase 1 multimodal support is defined as follows:
+
+- `UserMessage` may contain mixed `TextBlock` and `ImageBlock` content for vision-capable models
+- `ToolResultMessage` may contain mixed `TextBlock` and `ImageBlock` content so tools can return images back to the model
+- `AssistantMessage` does not require normalized image output support in phase 1 and remains limited to text, reasoning, and tool-call blocks
+
+This supports the most important initial multimodal workflows:
+
+- user provides an image to the model
+- a tool returns an image that the model must interpret in a later step
+
+Assistant-generated image output may be added later behind `supports_image_outputs`, but it is not required for the first implementation slice.
+
+Example user multimodal input:
+
+```python
+GenerateRequest(
+    messages=[
+        UserMessage(
+            content=[
+                TextBlock(text="What is in this image?"),
+                ImageBlock(data=base64_png, mime_type="image/png"),
+            ]
+        )
+    ]
+)
+```
+
+Example tool result with text and image:
+
+```python
+ToolResultMessage(
+    tool_call_id="call_1",
+    tool_name="get_circle_with_description",
+    content=[
+        TextBlock(text="A red circle with a diameter of 100 pixels."),
+        ImageBlock(data=base64_png, mime_type="image/png"),
+    ],
+    is_error=False,
+)
+```
+
+### Image inputs and outputs
+
+Phase 1 image support is defined as follows:
+
+- `UserMessage` may contain mixed `TextBlock` and `ImageBlock` content for vision-capable models
+- `ToolResultMessage` may contain mixed `TextBlock` and `ImageBlock` content so tool outputs can include images
+- `AssistantMessage` does not require normalized image output support in phase 1 and is limited to text, reasoning, and tool-call blocks
+
+This matches the most important multimodal workflows for the initial implementation:
+
+- user supplies an image to the model
+- a tool returns an image that the model must interpret on the next step
+
+Assistant-generated image output may be added later behind `supports_image_outputs`, but it is not required for the first implementation slice.
+
+Example user multimodal input:
+
+```python
+GenerateRequest(
+    messages=[
+        UserMessage(
+            content=[
+                TextBlock(text="What is in this image?"),
+                ImageBlock(
+                    data=base64_png,
+                    mime_type="image/png",
+                ),
+            ]
+        )
+    ]
+)
+```
+
+Example tool result with text and image:
+
+```python
+ToolResultMessage(
+    tool_call_id="call_1",
+    tool_name="get_circle_with_description",
+    content=[
+        TextBlock(text="A red circle with a diameter of 100 pixels."),
+        ImageBlock(data=base64_png, mime_type="image/png"),
+    ],
+    is_error=False,
+)
+```
 
 ## Public API surface
 
@@ -1016,6 +1128,7 @@ Concrete implementation rules:
 - stop on `[DONE]` if present
 - accumulate output blocks in provider assembly state and emit normalized events as frames arrive
 - preserve upstream response/message IDs in `response_id` and `protocol_state`
+- when serializing tool results that contain images, map them into structured OpenAI-compatible tool-output content items rather than flattening them into plain text
 
 ### OpenAI WebSocket mode integration
 
@@ -1183,6 +1296,9 @@ HTTP SSE remains the simpler default for one-shot or short exchanges.
 
 8. WebSocket continuation is connection-local when relying on uncached `previous_response_id` state.
    A reconnect may lose the low-latency continuation path even though the response protocol itself remains unchanged.
+
+9. Tool result images must remain attached to the tool-result payload as structured multimodal content.
+   OpenAI-compatible providers expect image-bearing tool outputs to be serialized as content items, not stringified blobs.
 
 ### OpenAI session replay policy
 
@@ -1552,6 +1668,7 @@ Concrete implementation rules:
 - filter empty blocks before request dispatch
 - preserve any signature-bearing reasoning artifacts in `protocol_state` for same-provider continuation
 - when using subscription/OAuth auth, allow provider-specific headers needed by the subscription backend to be attached by the Anthropic adapter
+- preserve mixed text/image ordering for user input and tool results when converting to Anthropic content blocks
 
 ### Anthropic gotchas
 
@@ -1578,6 +1695,9 @@ Concrete implementation rules:
 
 8. Disabling reasoning may require an explicit provider-native disabled value.
    For models that default to thinking behavior, omitting the thinking field is not sufficient.
+
+9. Vision-capable turns may include images in user content and tool results.
+   The adapter must preserve multimodal block ordering and avoid flattening image-bearing tool outputs into plain text.
 
 ### Anthropic session replay policy
 
@@ -1625,6 +1745,7 @@ Concrete implementation rules:
 - preserve thought signatures and related replay metadata only in same-provider `protocol_state`
 
 - if a streamed Gemini tool call omits arguments, normalize them to an empty object rather than failing generic tool-call assembly
+- preserve inline image parts in user messages and image-bearing tool results when converting to Gemini content parts
 
 ### Gemini gotchas
 
@@ -1648,6 +1769,9 @@ Concrete implementation rules:
 
 7. Thought signatures are not portable.
    Reuse only within the same provider family and model line where supported.
+
+8. Image-bearing tool results may require provider-specific routing to the correct content-part type.
+   The adapter must not collapse these results into plain text if the target Gemini model supports image input.
 
 ### Gemini session replay policy
 
@@ -1936,6 +2060,14 @@ Examples of structural normalization that may run even outside permissive semant
 - removing empty content blocks known to trigger provider errors
 - applying provider-safe tool-call ID normalization
 - normalizing missing tool-call argument payloads to `{}`
+
+Image validation rules:
+
+- image blocks must include both `mime_type` and non-empty base64 `data`
+- only image media types supported by the target provider should be accepted
+- mixed text and image block ordering must be preserved during serialization
+- if the target model does not support image input, validation should fail early rather than silently dropping image blocks
+- tool result images must be preserved when the target provider supports vision-capable tool-result replay
 
 Pydantic should be the primary mechanism for common validation. Use model validators and field validators for:
 
