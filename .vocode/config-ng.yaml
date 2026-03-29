@@ -1,0 +1,35 @@
+# Default Vocode configuration
+logging:
+  #default_level: debug
+variables:
+  LLM_ARCHITECT_REASONING: medium
+# OpenAI
+  LLM_DISCOVERY_MODEL:
+    value: openai/gpt-5-mini
+    type: llm_models
+  LLM_ARCHITECT_MODEL:
+    value: openai/gpt-5.4
+    type: llm_models
+  LLM_CODER_MODEL:
+    value: openai/gpt-5-mini
+    type: llm_models
+  LLM_DIFF_FORMAT: v4a
+# Gemini
+#  LLM_DISCOVERY_MODEL: gemini/gemini-3-flash-preview
+#  LLM_ARCHITECT_MODEL: gemini/gemini-3.1-pro-preview
+#  LLM_CODER_MODEL: gemini/gemini-3-flash-preview
+#  LLM_DIFF_FORMAT: patch
+internal_http:
+  port: 5050
+default_workflow: "agent"
+tools:
+  - name: read_files
+    auto_approve: true
+  - name: summarize_files
+    auto_approve: true
+  - name: list_files
+    auto_approve: true
+  - name: search_project
+    auto_approve: true
+  - name: run_agent
+    auto_approve: true
