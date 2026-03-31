@@ -191,6 +191,7 @@ Provide:
 - registration and lookup by `(provider, model)`
 - safe bare-model resolution with ambiguity errors
 - `get_model()` and `list_models()` helpers
+- use `provider/model` as the canonical combined identifier form when a single string is needed
 
 ### `models.py`
 

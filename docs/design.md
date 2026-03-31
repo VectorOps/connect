@@ -604,7 +604,7 @@ Model resolution rules:
 - `provider + model` is the canonical lookup key
 - if the user passes only a bare model string, the client may resolve it only when it is unambiguous in the registry
 - ambiguous bare model strings must raise a model resolution error rather than silently choosing a provider
-- the recommended external string form is `provider:model`
+- the recommended external string form is `provider/model`
 - resolution errors must include the candidate providers/models to make correction straightforward
 - registry internals must be keyed by `(provider, model)` even if convenience string helpers are exposed on top
 - public code must prefer explicit lookups such as `get_model(provider, model)` over implicit global resolution when correctness matters
@@ -625,7 +625,7 @@ Typical usage:
 
 ```python
 stream = client.stream(
-    "openai:gpt-5-mini",
+    "openai/gpt-5-mini",
     GenerateRequest(
         messages=[
             UserMessage(content="What files import httpx?")
