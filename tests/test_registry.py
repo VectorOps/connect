@@ -24,11 +24,13 @@ def test_builtin_registry_loads_multiple_models_per_vendor() -> None:
     assert len([model for model in all_models if model.provider == "openrouter"]) > 1
 
 
-def test_chatgpt_registry_only_contains_codex_family_models() -> None:
+def test_chatgpt_registry_includes_openai_models() -> None:
     chatgpt_models = list_models("chatgpt")
+    openai_models = list_models("openai")
 
     assert chatgpt_models
-    assert all("codex" in model.model for model in chatgpt_models)
+    assert {model.model for model in openai_models}.issubset({model.model for model in chatgpt_models})
+    assert any(model.model == "gpt-5.4-mini" for model in chatgpt_models)
 
 
 def test_get_model_returns_registered_builtin_model() -> None:

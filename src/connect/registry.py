@@ -55,7 +55,7 @@ class ModelRegistry:
             available = sorted(self._models_by_provider.get(provider, {}))
             if available:
                 raise ModelNotFoundError(
-                    f"Model '{provider}:{model}' is not registered. Available models: {', '.join(available)}"
+                    f"Model '{provider}/{model}' is not registered. Available models: {', '.join(available)}"
                 ) from exc
             raise ModelNotFoundError(f"Provider '{provider}' has no registered models") from exc
 
@@ -128,9 +128,10 @@ def list_models(provider: str | None = None) -> list[ModelSpec]:
 
 
 def build_default_provider_registry() -> ProviderRegistry:
-    from .providers import OpenAIProvider, OpenRouterProvider
+    from .providers import ChatGPTProvider, OpenAIProvider, OpenRouterProvider
 
     registry = ProviderRegistry()
+    registry.register("chatgpt", ChatGPTProvider())
     registry.register("openai", OpenAIProvider())
     registry.register("openrouter", OpenRouterProvider())
     return registry

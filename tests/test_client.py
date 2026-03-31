@@ -6,6 +6,7 @@ import pytest
 
 from connect.auth import BearerTokenAuth
 from connect.client import AsyncLLMClient
+from connect.credentials import CredentialManager
 from connect.registry import ModelRegistry, ProviderRegistry
 from connect.types import GenerateRequest, ModelSpec, RequestOptions, UserMessage
 
@@ -93,3 +94,9 @@ async def test_async_client_generate_uses_default_provider_registry() -> None:
     assert response.content[0].text == "pong"
     assert response.usage.total_tokens == 2
     assert session.requests[0]["headers"]["Authorization"] == "Bearer test-token"
+
+
+def test_credential_manager_registers_chatgpt_provider_by_default() -> None:
+    manager = CredentialManager()
+
+    assert "chatgpt" in manager.registry.list()

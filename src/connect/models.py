@@ -63,6 +63,29 @@ def load_builtin_models() -> tuple[ModelSpec, ...]:
         payload["pricing"] = _coerce_pricing(payload.get("pricing"))
         models.append(ModelSpec(**payload))
 
+    chatgpt_model_ids = {model.model for model in models if model.provider == "chatgpt"}
+    openai_models = [model for model in models if model.provider == "openai"]
+
+    for model in openai_models:
+        if model.model in chatgpt_model_ids:
+            continue
+
+        capabilities = {
+            **model.capabilities,
+            "supports_developer_role": False,
+            "usage_final_only": True,
+        }
+        models.append(
+            model.model_copy(
+                update={
+                    "provider": "chatgpt",
+                    "api_family": "chatgpt-responses",
+                    "base_url": "https://chatgpt.com/backend-api",
+                    "capabilities": capabilities,
+                }
+            )
+        )
+
     return tuple(models)
 
 

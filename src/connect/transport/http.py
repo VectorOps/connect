@@ -312,8 +312,14 @@ class HttpTransport:
                 error = payload["error"]
                 if isinstance(error.get("message"), str):
                     return error["message"]
+                if isinstance(error.get("error"), dict):
+                    nested_error = error["error"]
+                    if isinstance(nested_error.get("message"), str):
+                        return nested_error["message"]
             if isinstance(payload.get("message"), str):
                 return payload["message"]
+            if isinstance(payload.get("detail"), str):
+                return payload["detail"]
         return "Unexpected provider error"
 
     def _status_code_to_code(self, status_code: int) -> str:

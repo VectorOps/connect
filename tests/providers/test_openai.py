@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from connect.auth import ChatGPTAccessTokenAuth
 from connect.providers import OpenAIProvider, OpenRouterProvider
 from connect.registry import default_provider_registry
 from connect.types import (
@@ -66,8 +67,82 @@ def _openai_model(**updates) -> ModelSpec:
     return ModelSpec(**data)
 
 
+def _chatgpt_token(account_id: str = "acct_test") -> str:
+    def _encode(data: dict) -> str:
+        raw = json.dumps(data, separators=(",", ":")).encode()
+        return json.dumps("").encode() and __import__("base64").urlsafe_b64encode(raw).decode().rstrip("=")
+
+    header = _encode({"alg": "none", "typ": "JWT"})
+    payload = _encode({"https://api.openai.com/auth": {"chatgpt_account_id": account_id}})
+    return f"{header}.{payload}.signature"
+
+
 def test_default_provider_registry_exposes_implemented_providers() -> None:
-    assert default_provider_registry.list() == ["openai", "openrouter"]
+    assert default_provider_registry.list() == ["chatgpt", "openai", "openrouter"]
+
+
+def test_chatgpt_build_headers_and_payload_use_account_and_instructions() -> None:
+    from connect.providers import ChatGPTProvider
+
+    provider = ChatGPTProvider()
+    model = _openai_model(
+        provider="chatgpt",
+        model="gpt-5-codex",
+        api_family="chatgpt-responses",
+        base_url="https://chatgpt.com/backend-api",
+        capabilities={"supports_developer_role": False},
+    )
+    request = GenerateRequest(
+        messages=[UserMessage(content="ping")],
+        system_prompt="Be concise.",
+        tools=[
+            ToolSpec(
+                name="lookup",
+                description="Lookup data",
+                input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+            )
+        ],
+    )
+    options = RequestOptions(
+        auth=ChatGPTAccessTokenAuth(_chatgpt_token("acct_123")),
+        provider_options={"session_id": "sess_123", "text_verbosity": "high"},
+    )
+    headers = options.auth and __import__("asyncio")
+
+    payload = provider.build_payload(model, request, options)
+    built_headers = provider.build_headers(model, request, options)
+
+    assert payload["instructions"] == "Be concise."
+    assert payload["input"] == [{"role": "user", "content": [{"type": "input_text", "text": "ping"}]}]
+    assert payload["tool_choice"] == "auto"
+    assert payload["parallel_tool_calls"] is True
+    assert payload["prompt_cache_key"] == "sess_123"
+    assert payload["store"] is False
+    assert payload["text"]["verbosity"] == "high"
+    assert built_headers["chatgpt-account-id"] == "acct_123"
+    assert built_headers["session_id"] == "sess_123"
+    assert built_headers["OpenAI-Beta"] == "responses=experimental"
+    assert built_headers["originator"] == "connect"
+    assert built_headers["User-Agent"].startswith("pi (")
+
+
+def test_chatgpt_build_payload_includes_empty_instructions_when_missing() -> None:
+    from connect.providers import ChatGPTProvider
+
+    provider = ChatGPTProvider()
+    model = _openai_model(
+        provider="chatgpt",
+        model="gpt-5.4-mini",
+        api_family="chatgpt-responses",
+        base_url="https://chatgpt.com/backend-api",
+        capabilities={"supports_developer_role": False},
+    )
+    request = GenerateRequest(messages=[UserMessage(content="ping")])
+
+    payload = provider.build_payload(model, request, RequestOptions())
+
+    assert payload["instructions"] == ""
+    assert payload["store"] is False
 
 
 def test_openai_build_payload_serializes_multimodal_history_and_controls() -> None:

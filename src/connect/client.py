@@ -111,6 +111,7 @@ class AsyncLLMClient:
         headers, params = await resolve_request_auth(auth, headers=options.headers)
         effective_options = options.model_copy(
             update={
+                "auth": auth,
                 "headers": headers,
                 "transport_options": {**options.transport_options, "query_params": params},
             }
