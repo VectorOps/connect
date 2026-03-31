@@ -64,7 +64,7 @@ The baseline runtime dependency set is `httpx` and `pydantic`. If OpenAI WebSock
 Required package layout:
 
 ```text
-src/llmclient/
+src/connect/
     __init__.py
     client.py
     auth.py

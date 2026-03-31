@@ -1,5 +1,5 @@
 [project]
-name = "llmclient"
+name = "connect"
 version = "0.1.0"
 description = "Abstracted LLM client"
 readme = "README.md"
