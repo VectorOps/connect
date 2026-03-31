@@ -81,6 +81,17 @@ class ResponseAssembler:
         block = self._require_block(index, TextBlock, "text")
         return TextEndEvent(index=index, text=block.text)
 
+    def current_text(self, index: int) -> str | None:
+        self._ensure_index(index)
+        block = self._content[index]
+        if isinstance(block, TextBlock):
+            return block.text
+        return None
+
+    def set_text(self, index: int, text: str) -> None:
+        block = self._require_block(index, TextBlock, "text")
+        block.text = text
+
     def reasoning_start(self, index: int) -> ReasoningStartEvent:
         self._set_block(index, ReasoningBlock(text=""), expected_type="reasoning")
         return ReasoningStartEvent(index=index)
@@ -108,6 +119,17 @@ class ResponseAssembler:
             signature=block.signature,
             redacted=block.redacted,
         )
+
+    def current_reasoning(self, index: int) -> str | None:
+        self._ensure_index(index)
+        block = self._content[index]
+        if isinstance(block, ReasoningBlock):
+            return block.text
+        return None
+
+    def set_reasoning(self, index: int, text: str) -> None:
+        block = self._require_block(index, ReasoningBlock, "reasoning")
+        block.text = text
 
     def tool_call_start(self, index: int, *, tool_call_id: str, name: str) -> ToolCallStartEvent:
         self._set_block(
@@ -153,6 +175,33 @@ class ResponseAssembler:
             block.arguments = arguments
 
         return ToolCallEndEvent(index=index, tool_call=block)
+
+    def update_block_metadata(
+        self,
+        index: int,
+        *,
+        provider_meta: dict | None = None,
+        protocol_meta: dict | None = None,
+    ) -> None:
+        self._ensure_index(index)
+        block = self._content[index]
+        if block is None:
+            raise ProviderProtocolError(
+                make_error_info(
+                    code="missing_content_block",
+                    message=f"Expected content block at content index {index}",
+                    provider=self.provider,
+                    api_family=self.api_family,
+                )
+            )
+
+        if provider_meta:
+            block.provider_meta.update(provider_meta)
+        if protocol_meta:
+            block.protocol_meta.update(protocol_meta)
+
+    def has_tool_calls(self) -> bool:
+        return any(isinstance(block, ToolCallBlock) for block in self._content if block is not None)
 
     def build_response(self, *, finish_reason: str) -> AssistantResponse:
         return AssistantResponse(

@@ -125,3 +125,15 @@ def get_model(provider: str, model: str) -> ModelSpec:
 
 def list_models(provider: str | None = None) -> list[ModelSpec]:
     return default_model_registry.list_models(provider)
+
+
+def build_default_provider_registry() -> ProviderRegistry:
+    from .providers import OpenAIProvider, OpenRouterProvider
+
+    registry = ProviderRegistry()
+    registry.register("openai", OpenAIProvider())
+    registry.register("openrouter", OpenRouterProvider())
+    return registry
+
+
+default_provider_registry = build_default_provider_registry()

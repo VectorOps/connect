@@ -151,6 +151,29 @@ Provider contract requirements:
 - provider code must return enough provider metadata in the final response to support same-provider continuation
 - provider code may retain internal assembly state, but must strip internal-only fields before returning public models
 
+### Provider confidence requirements
+
+Every provider adapter must satisfy the same minimum confidence bar before it is considered complete enough for general use.
+
+Required standards:
+
+- request mapping is deterministic and driven by model capabilities, protocol defaults, and explicit provider options
+- unsupported common features fail early with clear validation errors rather than being silently dropped
+- provider-specific optional fields are either explicitly supported, explicitly ignored by design, or rejected with a structured error
+- stream handling covers all response item types and terminal conditions used by the target provider contract
+- malformed provider payloads produce `ProviderProtocolError` or a normalized `error` event instead of being repaired silently unless the design explicitly permits normalization
+- same-provider replay metadata is preserved intentionally and documented, including which IDs, signatures, or encrypted artifacts are required for continuation
+- usage normalization documents whether counts are final-only, partial, cache-adjusted, or best-effort
+- tests cover request serialization, normal streaming, terminal failure cases, incomplete responses, tool-call round trips, and multimodal edge cases where the provider supports them
+
+Each provider should have a short implementation note in code or docs that answers the following:
+
+- what is the canonical upstream API surface for this adapter
+- which reasoning controls are supported and how they are mapped
+- which provider metadata must be preserved for replay
+- which stream events are expected and which are intentionally unsupported
+- which provider options are accepted and what defaults are applied
+
 Required provider module shape:
 
 ```python
@@ -1787,29 +1810,30 @@ Use a provider-neutral reasoning config:
 
 ```python
 class ReasoningConfig(BaseModel):
-    effort: Literal["minimal", "low", "medium", "high", "xhigh"] | None = None
-    max_tokens: int | None = None
-    enabled: bool | None = None
+    effort: Literal["none", "minimal", "low", "medium", "high", "xhigh"] | None = None
+    summary: Literal["auto", "concise", "detailed"] | None = None
 ```
 
 Provider mapping:
 
-- OpenAI: `effort` maps directly where supported
-- Anthropic: map to enabled plus budget or adaptive effort
+- OpenAI: `effort` and `summary` map directly where supported
+- Anthropic: map to provider-native thinking controls conservatively and document any dropped fields
 - Gemini: map to thinking config or provider equivalent
 
 Important policy:
 
 - reasoning is best-effort
-- unsupported reasoning settings are ignored only if the provider cannot support them cleanly
+- unsupported reasoning settings are ignored only if the provider cannot support them cleanly and the downgrade is documented
+- if a provider cannot preserve reasoning replay artifacts safely, it must omit replay support rather than invent synthetic artifacts
 - if a user requests strict reasoning behavior, allow a future strict mode that raises instead of silently degrading
 
-Disable semantics:
+Reasoning confidence requirements:
 
-- `ReasoningConfig(enabled=False)` is the canonical provider-agnostic way to request no reasoning/thinking
-- if a provider requires an explicit native disabled marker, the adapter must send it
-- if a provider treats omission as disabled, omission is used
-- this behavior is controlled through model/provider capability flags rather than generic hardcoded provider-name checks
+- the adapter must document whether reasoning output is visible text, summary text, encrypted replay material, or some combination
+- the adapter must preserve provider-native reasoning artifacts only when they are valid for same-provider replay
+- the adapter must not synthesize opaque reasoning artifacts unless the provider explicitly allows deterministic regeneration
+- reasoning stream assembly must handle both incremental deltas and terminal reconciliation events without duplicating text
+- if reasoning usage is reported separately, the adapter must expose it through normalized usage fields
 
 ## Tool calling design
 
@@ -2176,6 +2200,43 @@ Phase 3:
 - optional permissive history repair
 - richer JSON mode support
 - optional extras for advanced auth flows
+
+## Near-term improvement plan
+
+The current implementation direction is correct, but provider confidence should be raised systematically rather than provider by provider in an ad hoc way.
+
+Priority 1: provider confidence baseline
+
+- define a shared adapter checklist and require each provider to satisfy it before being treated as production-ready
+- add a provider test matrix covering request construction, streaming success, streaming failure, incomplete termination, tool-call round trips, usage extraction, and multimodal replay where supported
+- document provider-specific replay requirements in one place so continuation behavior is intentional rather than incidental
+
+Priority 2: OpenAI-family parity and cleanup
+
+- align OpenAI request defaults intentionally, especially tool strictness, prompt caching behavior, reasoning defaults, and storage behavior
+- expand OpenAI Responses stream coverage to include all reasoning-summary and terminal event variants used by the upstream protocol
+- ensure finish-reason normalization reflects tool-use, incomplete, content-filter, cancelled, and error outcomes consistently
+- tighten OpenAI same-provider replay rules for assistant text IDs, reasoning items, and tool-call metadata so replay depends on explicit preserved metadata rather than synthesized placeholders where possible
+
+Priority 3: cross-provider reasoning confidence
+
+- document exactly which reasoning controls each provider supports and what is silently downgraded versus rejected
+- standardize how reasoning summaries, hidden reasoning artifacts, and encrypted replay material are stored in `provider_meta` and `protocol_state`
+- require reasoning-specific tests for providers that claim `supports_reasoning`
+
+Priority 4: compatibility and observability
+
+- move important provider option defaults out of incidental adapter logic into documented compatibility helpers or model capability data
+- add structured debug metadata for request id, response id, replay handles, and provider-specific stream anomalies
+- document which provider options are stable API and which are experimental escape hatches
+
+Completion criteria for a provider adapter:
+
+- deterministic request serialization for supported features
+- explicit validation or rejection of unsupported common features
+- complete terminal stream handling for the selected upstream protocol
+- documented replay policy and preserved metadata requirements
+- passing targeted tests for the provider confidence matrix
 
 ## Required implementation defaults
 

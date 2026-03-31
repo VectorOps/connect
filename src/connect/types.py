@@ -37,6 +37,7 @@ class ImageBlock(AnnotatedMetadataModel):
     type: typing.Literal["image"] = "image"
     mime_type: str
     data: str
+    detail: typing.Literal["high", "low", "auto", "original"] = "auto"
 
     @pydantic.field_validator("mime_type")
     @classmethod
@@ -162,8 +163,6 @@ class ToolResultMessage(MetadataModel):
     @pydantic.field_validator("content")
     @classmethod
     def validate_content(cls, value: list[ToolResultContentBlock]) -> list[ToolResultContentBlock]:
-        if not value:
-            raise ValueError("ToolResultMessage.content must not be empty")
         return value
 
 
@@ -174,7 +173,8 @@ Message = typing.Annotated[
 
 
 class ReasoningConfig(pydantic.BaseModel):
-    effort: typing.Literal["minimal", "low", "medium", "high", "xhigh"] | None = None
+    effort: typing.Literal["none", "minimal", "low", "medium", "high", "xhigh"] | None = None
+    summary: typing.Literal["auto", "concise", "detailed"] | None = None
     max_tokens: int | None = None
     enabled: bool | None = None
 
@@ -190,6 +190,7 @@ class ToolSpec(pydantic.BaseModel):
     name: str
     description: str
     input_schema: dict[str, typing.Any]
+    strict: bool | None = True
 
     @pydantic.field_validator("name")
     @classmethod
@@ -536,7 +537,7 @@ def validate_request_for_model(model: ModelSpec, request: GenerateRequest) -> No
     if request.tools and not model.supports_tools:
         raise ValueError(f"Model '{model.provider}:{model.model}' does not support tool use")
 
-    if request.reasoning and request.reasoning.enabled is not False and not model.supports_reasoning:
+    if request.reasoning and not model.supports_reasoning:
         raise ValueError(f"Model '{model.provider}:{model.model}' does not support reasoning controls")
 
     if request_uses_images(request) and not model.supports_images:

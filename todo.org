@@ -1,0 +1,6 @@
+#+title: TODO
+* [ ] Types fixes
+** [ ] Remove tool name regexp validation
+* [ ] Model fixes
+** [ ] Rename models - remove Generated prefix
+
