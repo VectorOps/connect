@@ -92,11 +92,14 @@ class OpenAIProvider(BaseProviderAdapter):
         if text_config is not None:
             payload["text"] = text_config
 
+        include = self._build_include(request, options)
+        if include is not None:
+            payload["include"] = include
+
         for option_name in (
             "background",
             "context_management",
             "conversation",
-            "include",
             "max_tool_calls",
             "parallel_tool_calls",
             "previous_response_id",
@@ -303,6 +306,12 @@ class OpenAIProvider(BaseProviderAdapter):
             }
             if block.text:
                 payload["content"] = [{"type": "reasoning_text", "text": block.text}]
+            encrypted_content = block.protocol_meta.get("openai_encrypted_content")
+            if not isinstance(encrypted_content, str) or not encrypted_content:
+                if block.redacted and isinstance(block.signature, str) and block.signature:
+                    encrypted_content = block.signature
+            if isinstance(encrypted_content, str) and encrypted_content:
+                payload["encrypted_content"] = encrypted_content
             return payload
         if block.type == "tool_call":
             return {
@@ -348,6 +357,20 @@ class OpenAIProvider(BaseProviderAdapter):
                 "strict": bool(request.response_format.strict),
             }
         }
+
+    def _build_include(self, request: GenerateRequest, options: RequestOptions) -> list[str] | None:
+        include = options.provider_options.get("include")
+        values: list[str] = []
+
+        if isinstance(include, str) and include:
+            values.append(include)
+        elif isinstance(include, (list, tuple, set)):
+            values.extend(str(value) for value in include if str(value))
+
+        if request.reasoning is not None and "reasoning.encrypted_content" not in values:
+            values.append("reasoning.encrypted_content")
+
+        return values or None
 
     def _map_stream_event(
         self,

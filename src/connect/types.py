@@ -358,6 +358,14 @@ class Usage(pydantic.BaseModel):
     completeness: typing.Literal["final", "partial", "none"] = "none"
 
 
+class CostBreakdown(pydantic.BaseModel):
+    input_cost: decimal.Decimal = decimal.Decimal("0")
+    output_cost: decimal.Decimal = decimal.Decimal("0")
+    cache_read_cost: decimal.Decimal = decimal.Decimal("0")
+    cache_write_cost: decimal.Decimal = decimal.Decimal("0")
+    total_cost: decimal.Decimal = decimal.Decimal("0")
+
+
 class ErrorInfo(pydantic.BaseModel):
     code: str
     message: str

@@ -194,6 +194,24 @@ def test_openai_build_payload_preserves_reasoning_replay_metadata() -> None:
     assert payload["input"][3]["type"] == "message"
     assert payload["input"][4]["type"] == "reasoning"
     assert payload["input"][4]["id"] == "rs_123"
+    assert payload["input"][4]["encrypted_content"] == "enc_abc"
+
+
+def test_openai_build_payload_requests_encrypted_reasoning_content() -> None:
+    provider = OpenAIProvider()
+    model = _openai_model()
+    request = GenerateRequest(
+        messages=[UserMessage(content="Hello")],
+        reasoning=ReasoningConfig(effort="medium", summary="detailed"),
+    )
+
+    payload = provider.build_payload(
+        model,
+        request,
+        RequestOptions(provider_options={"include": ["message.output_text.logprobs"]}),
+    )
+
+    assert payload["include"] == ["message.output_text.logprobs", "reasoning.encrypted_content"]
 
 
 @pytest.mark.asyncio

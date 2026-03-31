@@ -4,9 +4,9 @@ import decimal
 
 import pytest
 
-from connect.models import BUILTIN_MODELS, GeneratedModelsDocument, ModelPricing
+from connect.models import BUILTIN_MODELS, GeneratedModelsDocument, ModelPricing, calculate_usage_cost
 from connect.registry import AmbiguousModelError, ModelNotFoundError, ModelRegistry, get_model, list_models
-from connect.types import ModelSpec
+from connect.types import ModelSpec, Usage
 
 
 def test_builtin_registry_exposes_required_providers() -> None:
@@ -114,3 +114,41 @@ def test_generated_models_document_schema_matches_checked_in_data() -> None:
     )
 
     assert document.models[0].provider == "openai"
+
+
+def test_calculate_usage_cost_returns_generic_cost_breakdown() -> None:
+    model = ModelSpec(
+        provider="openai",
+        model="gpt-4.1-mini",
+        api_family="openai-responses",
+        pricing=ModelPricing(
+            input_per_million=decimal.Decimal("0.40"),
+            output_per_million=decimal.Decimal("1.60"),
+            cache_read_per_million=decimal.Decimal("0.10"),
+            cache_write_per_million=decimal.Decimal("0.80"),
+        ),
+    )
+    usage = Usage(
+        input_tokens=2_000,
+        output_tokens=500,
+        cache_read_tokens=1_000,
+        cache_write_tokens=250,
+        total_tokens=3_750,
+        completeness="final",
+    )
+
+    cost = calculate_usage_cost(model, usage)
+
+    assert cost == {
+        "input_cost": decimal.Decimal("0.0008"),
+        "output_cost": decimal.Decimal("0.0008"),
+        "cache_read_cost": decimal.Decimal("0.0001"),
+        "cache_write_cost": decimal.Decimal("0.0002"),
+        "total_cost": decimal.Decimal("0.0019"),
+    }
+
+
+def test_calculate_usage_cost_returns_none_without_model_pricing() -> None:
+    model = ModelSpec(provider="openai", model="gpt-4.1-mini", api_family="openai-responses")
+
+    assert calculate_usage_cost(model, Usage()) is None
