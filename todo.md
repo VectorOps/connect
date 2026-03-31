@@ -67,7 +67,7 @@ If OpenAI WebSocket support is included in the first pass, add an internal optio
 ## Workstream 1: package and dependency setup
 
 1. Update `pyproject.toml` dependencies:
-   - required: `httpx`, `pydantic`
+   - required: `aiohttp`, `pydantic`
    - optional extra: `websockets`
    - dev dependencies if this repo adopts them: `pytest`, `pytest-asyncio`, and optionally `anyio`
 2. Decide the supported Pydantic major version and code to it consistently.
@@ -90,7 +90,7 @@ Implement `src/connect/types.py` first because every other layer depends on it.
 
 - use discriminated unions for messages and content blocks
 - freeze registry metadata models where required
-- make request option models accept runtime objects like `httpx.Timeout`
+- make request option models accept runtime objects like `aiohttp.ClientTimeout`
 - preserve `provider_meta`, `protocol_meta`, `annotations`, and `protocol_state`
 - normalize `ImageBlock.data` as base64 text without a data URL prefix
 - include `Usage.completeness`
@@ -121,7 +121,7 @@ Also define a small common base exception that stores normalized `ErrorInfo`.
 
 ### `transport/http.py`
 
-Build a narrow wrapper around `httpx.AsyncClient` responsible for:
+Build a narrow wrapper around `aiohttp.ClientSession` responsible for:
 
 - client ownership versus caller-provided client reuse
 - request creation
@@ -302,7 +302,7 @@ Implement `src/connect/client.py` once at least one provider works end to end.
 - `AsyncLLMClient`
 - `generate()` that consumes `stream()` internally
 - `stream()` returning a `StreamHandle`
-- lifecycle support for internally owned `httpx.AsyncClient`
+- lifecycle support for internally owned `aiohttp.ClientSession`
 
 ### `StreamHandle` responsibilities
 

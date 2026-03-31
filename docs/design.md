@@ -50,14 +50,14 @@ The document is intended to be an implementation specification, not a tutorial.
 
 Use only small general-purpose Python libraries.
 
-- `httpx` for async HTTP, connection pooling, timeouts, proxies, and streaming
+- `aiohttp` for async HTTP, connection pooling, timeouts, proxies, and streaming
 - `websockets` only when a provider transport requires persistent WebSocket connections
 - `pydantic` for public data models, validation, and serialization
 - Python standard library for JSON, typing, base64, time, hmac/hashlib, and URL handling
 
 Do not use provider SDKs.
 
-The baseline runtime dependency set is `httpx` and `pydantic`. If OpenAI WebSocket mode is implemented, `websockets` must be an optional extra rather than a mandatory dependency for all users. SSE parsing must be implemented internally over `response.aiter_lines()` or equivalent. Do not add a dedicated SSE dependency.
+The baseline runtime dependency set is `aiohttp` and `pydantic`. If OpenAI WebSocket mode is implemented, `websockets` must be an optional extra rather than a mandatory dependency for all users. SSE parsing must be implemented internally over streamed response line iteration. Do not add a dedicated SSE dependency.
 
 ## High-level package structure
 
@@ -267,7 +267,7 @@ Per-call transport and execution controls:
 class RequestOptions(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    timeout: float | httpx.Timeout | None = 60.0
+    timeout: float | aiohttp.ClientTimeout | None = 60.0
     headers: dict[str, str] = Field(default_factory=dict)
     auth: AuthStrategy | None = None
     idempotency_key: str | None = None
@@ -556,7 +556,7 @@ class AsyncLLMClient:
     def __init__(
         self,
         *,
-        http_client: httpx.AsyncClient | None = None,
+        http_client: aiohttp.ClientSession | None = None,
         auth_registry: AuthRegistry | None = None,
         model_registry: ModelRegistry | None = None,
         provider_registry: ProviderRegistry | None = None,
@@ -855,7 +855,7 @@ Authentication must be independent from provider implementations.
 
 ```python
 class AuthStrategy(Protocol):
-    async def apply(self, request: httpx.Request) -> None:
+    async def apply(self, request: aiohttp.client_reqrep.ClientRequest) -> None:
         ...
 ```
 
@@ -959,7 +959,7 @@ Do not design the first version around Google service-account JWT minting, Appli
 
 ### Shared HTTP transport
 
-Provide a small wrapper around `httpx.AsyncClient` so providers depend on a narrow interface.
+Provide a small wrapper around `aiohttp.ClientSession` so providers depend on a narrow interface.
 
 Responsibilities:
 
@@ -1124,7 +1124,7 @@ OpenAI-specific provider options are:
 
 Concrete implementation rules:
 
-- implement SSE streaming over `httpx.AsyncClient.stream()`
+- implement SSE streaming over `aiohttp.ClientSession` streamed responses
 - parse `data:` frames and ignore comment/blank frames
 - stop on `[DONE]` if present
 - accumulate output blocks in provider assembly state and emit normalized events as frames arrive
@@ -1664,7 +1664,7 @@ Concrete request shape for initial implementation:
 
 Concrete implementation rules:
 
-- implement SSE/event-stream parsing over `httpx`
+- implement SSE/event-stream parsing over `aiohttp`
 - map streamed text, thinking, and tool-use deltas into normalized events
 - filter empty blocks before request dispatch
 - preserve any signature-bearing reasoning artifacts in `protocol_state` for same-provider continuation
@@ -1740,7 +1740,7 @@ Concrete request shape for initial implementation:
 
 Concrete implementation rules:
 
-- implement streaming JSON/chunk parsing with `httpx`
+- implement streaming JSON/chunk parsing with `aiohttp`
 - assemble content parts into normalized text, reasoning, and tool-call blocks
 - synthesize tool-call IDs if the provider omits them
 - preserve thought signatures and related replay metadata only in same-provider `protocol_state`
@@ -2098,7 +2098,7 @@ Internal hot-path streaming assemblers may use plain dicts or lightweight intern
 
 ### Cancellation
 
-Rely on task cancellation plus `httpx` stream closure. Ensure provider streams stop promptly when the caller cancels iteration.
+Rely on task cancellation plus `aiohttp` stream closure. Ensure provider streams stop promptly when the caller cancels iteration.
 
 ### Retry policy
 
@@ -2144,7 +2144,7 @@ The common model is driven by the initial three providers, not by every edge cas
 Phase 1:
 
 - core types
-- `httpx` transport
+- `aiohttp` transport
 - SSE parser
 - OpenAI Responses provider
 - ChatGPT/Codex subscription provider
@@ -2171,7 +2171,7 @@ Phase 3:
 
 ## Required implementation defaults
 
-- The implementation uses `httpx.AsyncClient` with connection pooling and a reusable client instance.
+- The implementation uses `aiohttp.ClientSession` with connection pooling and a reusable client instance.
 - The implementation prefers streaming APIs for all providers.
 - The implementation uses OpenAI Responses, ChatGPT/Codex subscription-backed access, Anthropic Messages, Gemini generateContent, and OpenRouter as the first-class initial provider set.
 - The implementation keeps provider-native replay metadata only within the same provider session.
@@ -2183,7 +2183,7 @@ Phase 3:
 Implement the library as a small layered system:
 
 - a stable provider-agnostic request and response model
-- a narrow async transport built on `httpx`
+- a narrow async transport built on `aiohttp`
 - one adapter per provider
 - a pluggable auth layer
 - a model registry with pricing and capability metadata
