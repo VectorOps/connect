@@ -13,6 +13,8 @@
 - Maintain generated model metadata in a checked-in artifact plus a refresh script rather than querying model catalogs at runtime.
 - Treat streaming, tool-call assembly, reasoning blocks, image handling, and provider quirks as first-class test areas.
 - Isolate provider-specific request building and event normalization behind per-provider adapters.
+- Add or update automated tests for every code change when there is a reasonable place to cover the behavior.
+- Use `uv` for dependency management and command execution.
 
 ## Implementation goals
 

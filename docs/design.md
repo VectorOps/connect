@@ -45,6 +45,8 @@ The document is intended to be an implementation specification, not a tutorial.
 4. Authentication is pluggable and request-scoped.
 5. Message and event models are provider-agnostic, but retain opaque provider metadata needed for same-provider replay.
 6. A chat session is provider-bound. Switching providers starts a new session.
+7. All code changes should add or update automated tests where there is a reasonable place to cover the behavior.
+8. Development commands should be run through `uv`.
 
 ## Implementation stack
 
@@ -2140,6 +2142,12 @@ The design supports future providers if they can map onto the common abstraction
 The common model is driven by the initial three providers, not by every edge case from day one.
 
 ## Minimal implementation plan
+
+Development workflow:
+
+- use `uv sync` to install dependencies
+- use `uv run ...` for project commands
+- use `uv run pytest` for validation, preferring targeted test paths while iterating
 
 Phase 1:
 
