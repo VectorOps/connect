@@ -3,11 +3,11 @@
 ## Status snapshot
 
 - The core package is implemented under `src/connect/` with typed public models, transport helpers, registry/model loading, and the async client API.
-- Implemented providers: OpenAI, OpenRouter, and ChatGPT.
+- Implemented providers: OpenAI, OpenRouter, ChatGPT, Anthropic, and Gemini.
 - Implemented auth layers include API-key auth, bearer/query auth helpers, dynamic auth routing, environment resolution, and OAuth2 credential storage/refresh flows for ChatGPT.
 - Built-in generated model metadata already includes OpenAI, ChatGPT, Anthropic, Gemini, and OpenRouter model records in `src/connect/data/models.json`.
-- Existing tests cover transport helpers, client/registry behavior, OpenAI-family providers, and ChatGPT credentials.
-- Remaining phase-1 work is to implement the Anthropic and Gemini providers plus usage helpers and the corresponding tests.
+- Existing tests cover transport helpers, OpenAI, Gemini, and Anthropic provider behavior, live integration paths for OpenAI/Gemini/Anthropic/ChatGPT, and ChatGPT credentials.
+- The initial provider set is now implemented for direct API access. The main remaining work is usage helpers, broader provider-confidence coverage, observability hooks, and model-registry generation tooling.
 
 ## Note
 
@@ -17,10 +17,11 @@
 
 - `docs/design.md` remains the implementation spec.
 - The package already contains the shared client/runtime layers: `client.py`, `types.py`, `exceptions.py`, `registry.py`, `models.py`, `auth.py`, `auth_router.py`, transport modules, and credential helpers.
-- Provider modules currently implemented are `openai.py`, `openrouter.py`, and `chatgpt.py`.
+- Provider modules currently implemented are `openai.py`, `openrouter.py`, `chatgpt.py`, `anthropic.py`, and `gemini.py`.
 - OAuth2 credential management is present under `src/connect/credentials/`, including ChatGPT login/refresh support.
 - The checked-in generated model registry already ships data for the initial provider set, including Gemini and Anthropic model metadata.
-- The test suite already includes transport, registry, client, OpenAI-family provider, and credential coverage.
+- The test suite already includes transport coverage, provider coverage for OpenAI/Gemini/Anthropic, ChatGPT credential coverage, and live integration coverage for OpenAI/Gemini/Anthropic/ChatGPT.
+- Not yet implemented from the target layout/spec are `src/connect/usage.py`, observability hooks, Anthropic OAuth credential management, and a checked-in model-registry generation script.
 
 ## Guidelines
 
@@ -448,6 +449,8 @@ Use these milestones to keep the implementation shippable:
 - Anthropic implemented with SSE mapping
 - Gemini implemented with JSON streaming
 
+Status: complete for the direct API provider set.
+
 ### Milestone D: production hardening
 
 - registry/model metadata refined
@@ -455,6 +458,8 @@ Use these milestones to keep the implementation shippable:
 - usage/cost helpers finalized
 - observability hooks added
 - test coverage broadened across error cases and multimodal flows
+
+Status: in progress. Validation and provider coverage have advanced, but usage helpers, observability hooks, dedicated ChatGPT/OpenRouter adapter tests, and registry-generation tooling are still outstanding.
 
 ## Recommended implementation order by file
 
@@ -498,6 +503,8 @@ Use these milestones to keep the implementation shippable:
 - Provider-specific replay metadata is preserved for same-provider continuation.
 - Automated tests cover the core transport, registry, client, and provider serialization/streaming logic.
 - Model metadata is registry-driven, with a path toward generated checked-in metadata.
+
+Current gap to this bar: provider implementation is largely complete, but the repository still needs `usage.py`, fuller provider-confidence coverage for ChatGPT/OpenRouter and broader client/registry tests, observability hooks, and model-registry generation tooling.
 
 ## Nice-to-have items after the first implementation pass
 

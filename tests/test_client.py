@@ -8,7 +8,7 @@ from connect.auth import AuthContext, ResolvedAuth
 from connect.auth import BearerTokenAuth
 from connect.auth_env import resolve_transport_auth_from_env
 from connect.auth_router import DynamicAuthRouter, EnvironmentCredentialManager
-from connect.client import AsyncLLMClient
+from connect.client import AsyncLLMClient, StreamHandle
 from connect.credentials import ChatGPTCredentials, CredentialManager, OAuthLoginCallbacks, OAuthPrompt
 from connect.registry import ModelRegistry, ProviderRegistry
 from connect.types import GenerateRequest, ModelSpec, RequestOptions, UserMessage
@@ -235,3 +235,66 @@ def test_environment_credential_manager_reads_and_writes_tokens() -> None:
     asyncio.run(manager.set_token("OPENAI_API_KEY", "sk-env"))
 
     assert env["OPENAI_API_KEY"] == "sk-env"
+
+
+@pytest.mark.asyncio
+async def test_async_client_emits_observability_events() -> None:
+    session = _FakeClientSession()
+    model = ModelSpec(provider="openai", model="gpt-4.1-mini", api_family="openai-responses")
+    model_registry = ModelRegistry([model])
+    provider_registry = ProviderRegistry()
+    from connect.providers import OpenAIProvider
+
+    provider_registry.register("openai", OpenAIProvider())
+    observed: list[dict] = []
+
+    async with AsyncLLMClient(
+        http_client=session,
+        model_registry=model_registry,
+        provider_registry=provider_registry,
+        event_hook=observed.append,
+    ) as client:
+        response = await client.generate(
+            "openai/gpt-4.1-mini",
+            GenerateRequest(messages=[UserMessage(content="ping")]),
+            options=RequestOptions(auth=BearerTokenAuth("test-token")),
+        )
+
+    assert response.content[0].text == "pong"
+    assert [event["type"] for event in observed] == [
+        "request_start",
+        "response_headers",
+        "first_token",
+        "request_end",
+    ]
+    assert observed[0]["provider"] == "openai"
+    assert observed[-1]["finish_reason"] == "stop"
+
+
+@pytest.mark.asyncio
+async def test_stream_handle_invokes_close_callback_on_terminal_event() -> None:
+    closed: list[str] = []
+
+    async def _iterator():
+        from connect.types import AssistantResponse, ResponseEndEvent, Usage
+
+        yield ResponseEndEvent(
+            response=AssistantResponse(
+                provider="openai",
+                model="gpt-4.1-mini",
+                api_family="openai-responses",
+                content=[],
+                finish_reason="stop",
+                usage=Usage(),
+                response_id="resp_test",
+            )
+        )
+
+    async def _close() -> None:
+        closed.append("done")
+
+    stream = StreamHandle(_iterator(), close_callback=_close)
+    response = await stream.final_response()
+
+    assert response.response_id == "resp_test"
+    assert closed == ["done"]
