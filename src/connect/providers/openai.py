@@ -16,6 +16,7 @@ from ..types import (
     RequestOptions,
     ResponseEndEvent,
     StreamEvent,
+    Usage,
     ToolResultMessage,
     UsageEvent,
     UserMessage,
@@ -28,6 +29,49 @@ class OpenAIProvider(BaseProviderAdapter):
     api_family = "openai-responses"
     default_base_url = "https://api.openai.com/v1"
     stream_path = "/responses"
+
+    def build_usage(
+        self,
+        payload: Any,
+        *,
+        completeness: str,
+    ) -> Usage | None:
+        if not isinstance(payload, dict):
+            return None
+
+        input_details = payload.get("input_tokens_details")
+        if not isinstance(input_details, dict):
+            input_details = {}
+
+        output_details = payload.get("output_tokens_details")
+        if not isinstance(output_details, dict):
+            output_details = {}
+
+        raw_input_tokens = int(payload.get("input_tokens") or 0)
+        output_tokens = int(payload.get("output_tokens") or 0)
+        reasoning_tokens = int(output_details.get("reasoning_tokens") or payload.get("reasoning_tokens") or 0)
+        cache_read_tokens = int(input_details.get("cached_tokens") or payload.get("cache_read_tokens") or 0)
+        cache_write_tokens = int(
+            input_details.get("cache_write_tokens")
+            or input_details.get("cache_creation_tokens")
+            or payload.get("cache_write_tokens")
+            or 0
+        )
+        input_tokens = max(raw_input_tokens - cache_read_tokens, 0)
+        total_tokens = int(
+            payload.get("total_tokens")
+            or (input_tokens + output_tokens + cache_read_tokens + cache_write_tokens)
+        )
+
+        return Usage(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            reasoning_tokens=reasoning_tokens,
+            cache_read_tokens=cache_read_tokens,
+            cache_write_tokens=cache_write_tokens,
+            total_tokens=total_tokens,
+            completeness=completeness,
+        )
 
     def build_headers(
         self,

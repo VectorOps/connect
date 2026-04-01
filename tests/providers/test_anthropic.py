@@ -271,7 +271,7 @@ async def test_anthropic_stream_response_normalizes_reasoning_tool_calls_and_usa
                         "input_tokens": 5,
                         "output_tokens": 0,
                         "cache_read_input_tokens": 1,
-                        "cache_creation_input_tokens": 0,
+                        "cache_creation_input_tokens": 2,
                     },
                 },
             },
@@ -297,7 +297,7 @@ async def test_anthropic_stream_response_normalizes_reasoning_tool_calls_and_usa
                     "input_tokens": 5,
                     "output_tokens": 3,
                     "cache_read_input_tokens": 1,
-                    "cache_creation_input_tokens": 0,
+                    "cache_creation_input_tokens": 2,
                 },
             },
             {"type": "message_stop"},
@@ -340,6 +340,8 @@ async def test_anthropic_stream_response_normalizes_reasoning_tool_calls_and_usa
     assert events[-1].response.usage.input_tokens == 5
     assert events[-1].response.usage.output_tokens == 3
     assert events[-1].response.usage.cache_read_tokens == 1
+    assert events[-1].response.usage.cache_write_tokens == 2
+    assert events[-1].response.usage.total_tokens == 11
 
 
 @pytest.mark.asyncio

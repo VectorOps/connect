@@ -35,6 +35,10 @@ def _text_from_response(response) -> str:
     return "\n".join(block.text for block in response.content if block.type == "text")
 
 
+def _print_usage(label: str, response) -> None:
+    print(f"{label} usage: {response.usage.model_dump()}")
+
+
 def _chatgpt_auth():
     auth = resolve_env_auth(
         "chatgpt",
@@ -62,6 +66,7 @@ async def test_chatgpt_generate_live_uses_oauth_access_token() -> None:
         )
 
     text = _text_from_response(response).lower()
+    _print_usage("chatgpt generate", response)
     assert response.provider == "chatgpt"
     assert response.api_family == "chatgpt-responses"
     assert response.response_id is not None
@@ -89,6 +94,7 @@ async def test_chatgpt_stream_live_emits_text_events_and_final_response() -> Non
 
         response = await stream.final_response()
 
+    _print_usage("chatgpt stream", response)
     assert event_types[0] == "response_start"
     assert "text_delta" in event_types or "text_end" in event_types
     assert event_types[-1] == "response_end"

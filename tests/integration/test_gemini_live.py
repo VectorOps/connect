@@ -71,6 +71,10 @@ def _contains_any_color(text: str) -> bool:
     )
 
 
+def _print_usage(label: str, response) -> None:
+    print(f"{label} usage: {response.usage.model_dump()}")
+
+
 @pytest.mark.asyncio
 async def test_gemini_generate_live() -> None:
     _require_gemini_key()
@@ -86,6 +90,7 @@ async def test_gemini_generate_live() -> None:
         )
 
     text = _text_from_response(response).lower()
+    _print_usage("gemini generate", response)
     assert response.provider == "gemini"
     assert response.api_family == "gemini-generate-content"
     assert response.usage.completeness in {"final", "partial", "none"}
@@ -112,6 +117,7 @@ async def test_gemini_stream_live_emits_text_events_and_final_response() -> None
 
         response = await stream.final_response()
 
+    _print_usage("gemini stream", response)
     assert event_types[0] == "response_start"
     assert "text_delta" in event_types or "text_end" in event_types
     assert event_types[-1] == "response_end"
@@ -170,6 +176,8 @@ async def test_gemini_tool_call_and_tool_result_round_trip_live() -> None:
             options=RequestOptions(auth=_gemini_auth()),
         )
 
+    _print_usage("gemini tool call", tool_response)
+    _print_usage("gemini tool result", final_response)
     final_text = _text_from_response(final_response).lower()
     assert "green" in final_text
 
@@ -227,6 +235,8 @@ async def test_gemini_multimodal_user_image_and_tool_result_image_live() -> None
             options=RequestOptions(auth=_gemini_auth()),
         )
 
+    _print_usage("gemini image", image_response)
+    _print_usage("gemini tool image", tool_image_response)
     tool_image_text = _text_from_response(tool_image_response).lower()
     assert tool_image_text
     assert "red" in tool_image_text or "square" in tool_image_text

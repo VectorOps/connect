@@ -69,6 +69,10 @@ def _contains_any_color(text: str) -> bool:
     )
 
 
+def _print_usage(label: str, response) -> None:
+    print(f"{label} usage: {response.usage.model_dump()}")
+
+
 @pytest.mark.asyncio
 async def test_anthropic_generate_live() -> None:
     _require_anthropic_key()
@@ -84,6 +88,7 @@ async def test_anthropic_generate_live() -> None:
         )
 
     text = _text_from_response(response).lower()
+    _print_usage("anthropic generate", response)
     assert response.provider == "anthropic"
     assert response.api_family == "anthropic-messages"
     assert response.usage.completeness in {"final", "partial", "none"}
@@ -110,6 +115,7 @@ async def test_anthropic_stream_live_emits_text_events_and_final_response() -> N
 
         response = await stream.final_response()
 
+    _print_usage("anthropic stream", response)
     assert event_types[0] == "response_start"
     assert "text_delta" in event_types or "text_end" in event_types
     assert event_types[-1] == "response_end"
@@ -168,6 +174,8 @@ async def test_anthropic_tool_call_and_tool_result_round_trip_live() -> None:
             options=RequestOptions(auth=_anthropic_auth()),
         )
 
+    _print_usage("anthropic tool call", tool_response)
+    _print_usage("anthropic tool result", final_response)
     final_text = _text_from_response(final_response).lower()
     assert "green" in final_text
 
@@ -225,6 +233,8 @@ async def test_anthropic_multimodal_user_image_and_tool_result_image_live() -> N
             options=RequestOptions(auth=_anthropic_auth()),
         )
 
+    _print_usage("anthropic image", image_response)
+    _print_usage("anthropic tool image", tool_image_response)
     tool_image_text = _text_from_response(tool_image_response).lower()
     assert tool_image_text
     assert "red" in tool_image_text or "square" in tool_image_text

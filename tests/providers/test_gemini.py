@@ -314,6 +314,7 @@ async def test_gemini_stream_response_normalizes_reasoning_tool_calls_and_usage(
         "response_start",
         "reasoning_start",
         "reasoning_delta",
+        "usage",
         "reasoning_delta",
         "reasoning_end",
         "text_start",
@@ -321,16 +322,16 @@ async def test_gemini_stream_response_normalizes_reasoning_tool_calls_and_usage(
         "text_end",
         "tool_call_start",
         "tool_call_delta",
-        "usage",
         "tool_call_end",
         "usage",
         "response_end",
     ]
-    assert events[-4].usage.completeness == "partial"
+    assert events[3].usage.completeness == "partial"
     assert events[-2].usage.input_tokens == 4
     assert events[-2].usage.output_tokens == 4
     assert events[-2].usage.reasoning_tokens == 2
     assert events[-2].usage.cache_read_tokens == 1
+    assert events[-2].usage.total_tokens == 9
     assert events[-2].usage.completeness == "final"
     assert events[-1].response.response_id == "resp_gemini"
     assert events[-1].response.finish_reason == "tool_call"
@@ -342,6 +343,54 @@ async def test_gemini_stream_response_normalizes_reasoning_tool_calls_and_usage(
     assert events[-1].response.content[1].text == "Answer ready"
     assert events[-1].response.content[2].arguments == {"query": "weather"}
     assert events[-1].response.content[2].protocol_meta["gemini_thought_signature"] == "sig_tool"
+
+
+@pytest.mark.asyncio
+async def test_gemini_stream_response_captures_usage_without_candidates() -> None:
+    provider = GeminiProvider()
+    model = _gemini_model(model="gemini-2.5-flash")
+    request = GenerateRequest(messages=[UserMessage(content="Hello")])
+    response = _FakeStreamResponse(
+        [
+            {
+                "responseId": "resp_usage_only",
+                "promptFeedback": {"blockReason": "SAFETY"},
+                "usageMetadata": {
+                    "promptTokenCount": 6,
+                    "candidatesTokenCount": 0,
+                    "thoughtsTokenCount": 0,
+                    "totalTokenCount": 6,
+                    "cachedContentTokenCount": 2,
+                },
+            }
+        ]
+    )
+
+    events = [
+        event
+        async for event in provider.stream_response(
+            model=model,
+            request=request,
+            options=RequestOptions(),
+            http=_FakeHttpTransport(response),
+        )
+    ]
+
+    assert [event.type for event in events] == ["response_start", "usage", "usage", "response_end"]
+    assert events[1].usage.completeness == "partial"
+    assert events[1].usage.input_tokens == 4
+    assert events[1].usage.output_tokens == 0
+    assert events[1].usage.cache_read_tokens == 2
+    assert events[1].usage.total_tokens == 6
+    assert events[2].usage.completeness == "final"
+    assert events[2].usage.input_tokens == 4
+    assert events[2].usage.output_tokens == 0
+    assert events[2].usage.cache_read_tokens == 2
+    assert events[2].usage.total_tokens == 6
+    assert events[-1].response.response_id == "resp_usage_only"
+    assert events[-1].response.finish_reason == "content_filter"
+    assert events[-1].response.usage.input_tokens == 4
+    assert events[-1].response.usage.cache_read_tokens == 2
 
 
 @pytest.mark.asyncio
@@ -459,9 +508,9 @@ async def test_gemini_stream_response_accepts_array_payloads_from_live_api() -> 
 
     assert [event.type for event in events] == [
         "response_start",
+        "usage",
         "text_start",
         "text_delta",
-        "usage",
         "text_end",
         "usage",
         "response_end",

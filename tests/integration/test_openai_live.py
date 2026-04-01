@@ -71,6 +71,10 @@ def _contains_any_color(text: str) -> bool:
     )
 
 
+def _print_usage(label: str, response) -> None:
+    print(f"{label} usage: {response.usage.model_dump()}")
+
+
 @pytest.mark.asyncio
 async def test_openai_generate_live() -> None:
     _require_openai_key()
@@ -86,6 +90,7 @@ async def test_openai_generate_live() -> None:
         )
 
     text_blocks = [block for block in response.content if block.type == "text"]
+    _print_usage("openai generate", response)
     assert text_blocks
     assert response.provider == "openai"
     assert response.api_family == "openai-responses"
@@ -114,6 +119,7 @@ async def test_openai_stream_live_emits_text_events_and_final_response() -> None
 
         response = await stream.final_response()
 
+    _print_usage("openai stream", response)
     assert event_types[0] == "response_start"
     assert "text_delta" in event_types or "text_end" in event_types
     assert event_types[-1] == "response_end"
@@ -155,6 +161,7 @@ async def test_openai_json_schema_response_live() -> None:
             options=RequestOptions(auth=_openai_auth()),
         )
 
+    _print_usage("openai json schema", response)
     payload = json.loads(_text_from_response(response))
     assert payload == {"name": "connect", "ok": True}
 
@@ -211,6 +218,8 @@ async def test_openai_tool_call_and_tool_result_round_trip_live() -> None:
             options=RequestOptions(auth=_openai_auth()),
         )
 
+    _print_usage("openai tool call", tool_response)
+    _print_usage("openai tool result", final_response)
     final_text = _text_from_response(final_response).lower()
     assert "green" in final_text
 
@@ -268,6 +277,8 @@ async def test_openai_multimodal_user_image_and_tool_result_image_live() -> None
             options=RequestOptions(auth=_openai_auth()),
         )
 
+    _print_usage("openai image", image_response)
+    _print_usage("openai tool image", tool_image_response)
     tool_image_text = _text_from_response(tool_image_response).lower()
     assert tool_image_text
     assert "red" in tool_image_text or "square" in tool_image_text

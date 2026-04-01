@@ -23,6 +23,10 @@ def _text_from_response(response) -> str:
     return "\n".join(block.text for block in response.content if block.type == "text")
 
 
+def _print_usage(label: str, response) -> None:
+    print(f"{label} usage: {response.usage.model_dump()}")
+
+
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.skipif(
@@ -75,6 +79,7 @@ async def test_chatgpt_oauth_login_live() -> None:
             ),
         )
 
+    _print_usage("chatgpt oauth generate", response)
     assert response.provider == "chatgpt"
     assert response.api_family == "chatgpt-responses"
     assert response.response_id is not None

@@ -237,6 +237,9 @@ class GeminiProvider(BaseProviderAdapter):
                         if isinstance(prompt_feedback, dict) and prompt_feedback.get("blockReason"):
                             finish_reason = "content_filter"
 
+                        if partial_usage is not None:
+                            yield assembler.set_usage(partial_usage)
+
                         candidates = chunk.get("candidates")
                         candidate = candidates[0] if isinstance(candidates, list) and candidates else None
                         if not isinstance(candidate, dict):
@@ -260,9 +263,6 @@ class GeminiProvider(BaseProviderAdapter):
                             yield emitted_event
                             if isinstance(emitted_event, ResponseEndEvent) or emitted_event.type == "error":
                                 return
-
-                        if partial_usage is not None:
-                            yield assembler.set_usage(partial_usage)
             except ProviderProtocolError as exc:
                 yield assembler.error(exc.error)
                 return

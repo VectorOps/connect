@@ -640,6 +640,84 @@ async def test_openai_stream_response_handles_refusal_and_incomplete_events() ->
     assert events[-1].response.content[0].text == "Sorry, I can't help with that."
 
 
+@pytest.mark.asyncio
+async def test_openai_stream_response_captures_cached_and_partial_usage() -> None:
+    provider = OpenAIProvider()
+    model = _openai_model()
+    request = GenerateRequest(messages=[UserMessage(content="Hello")])
+    response = _FakeStreamResponse(
+        [
+            {
+                "type": "response.created",
+                "response": {
+                    "id": "resp_usage",
+                    "status": "in_progress",
+                    "usage": {
+                        "input_tokens": 7,
+                        "output_tokens": 0,
+                        "total_tokens": 7,
+                        "input_tokens_details": {
+                            "cached_tokens": 2,
+                            "cache_write_tokens": 1,
+                        },
+                        "output_tokens_details": {"reasoning_tokens": 0},
+                    },
+                },
+            },
+            {
+                "type": "response.completed",
+                "response": {
+                    "id": "resp_usage",
+                    "status": "completed",
+                    "usage": {
+                        "input_tokens": 7,
+                        "output_tokens": 4,
+                        "total_tokens": 11,
+                        "input_tokens_details": {
+                            "cached_tokens": 2,
+                            "cache_write_tokens": 1,
+                        },
+                        "output_tokens_details": {"reasoning_tokens": 1},
+                    },
+                },
+            },
+        ]
+    )
+
+    events = [
+        event
+        async for event in provider.stream_response(
+            model=model,
+            request=request,
+            options=RequestOptions(),
+            http=_FakeHttpTransport(response),
+        )
+    ]
+
+    assert [event.type for event in events] == ["response_start", "usage", "usage", "response_end"]
+    assert events[1].usage.completeness == "partial"
+    assert events[1].usage.input_tokens == 5
+    assert events[1].usage.output_tokens == 0
+    assert events[1].usage.reasoning_tokens == 0
+    assert events[1].usage.cache_read_tokens == 2
+    assert events[1].usage.cache_write_tokens == 1
+    assert events[1].usage.total_tokens == 7
+    assert events[2].usage.completeness == "final"
+    assert events[2].usage.input_tokens == 5
+    assert events[2].usage.output_tokens == 4
+    assert events[2].usage.reasoning_tokens == 1
+    assert events[2].usage.cache_read_tokens == 2
+    assert events[2].usage.cache_write_tokens == 1
+    assert events[2].usage.total_tokens == 11
+    assert events[-1].response.response_id == "resp_usage"
+    assert events[-1].response.usage.input_tokens == 5
+    assert events[-1].response.usage.output_tokens == 4
+    assert events[-1].response.usage.reasoning_tokens == 1
+    assert events[-1].response.usage.cache_read_tokens == 2
+    assert events[-1].response.usage.cache_write_tokens == 1
+    assert events[-1].response.usage.total_tokens == 11
+
+
 def test_openrouter_provider_applies_routing_headers_and_payload() -> None:
     provider = OpenRouterProvider()
     model = _openai_model(provider="openrouter")
