@@ -49,15 +49,10 @@ Simplified example
 ```python
 import asyncio
 
-from connect import AsyncLLMClient, GenerateRequest, RequestOptions, UserMessage
-from connect.auth_env import resolve_env_auth
+from connect import AsyncLLMClient, GenerateRequest, UserMessage
 
 
 async def main() -> None:
-    auth = resolve_env_auth("openai")
-    if auth is None:
-        raise RuntimeError("OPENAI_API_KEY is not set")
-
     async with AsyncLLMClient() as client:
         response = await client.generate(
             "openai/gpt-4.1-mini",
@@ -65,7 +60,6 @@ async def main() -> None:
                 messages=[UserMessage(content="Explain what VectorOps Connect does in one sentence.")],
                 max_output_tokens=64,
             ),
-            options=RequestOptions(auth=auth),
         )
 
     for block in response.content:
