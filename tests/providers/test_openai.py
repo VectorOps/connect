@@ -5,7 +5,7 @@ import json
 import pytest
 
 from connect.auth import ChatGPTAccessTokenAuth
-from connect.providers import OpenAIProvider, OpenRouterProvider
+from connect.providers import GeminiProvider, OpenAIProvider, OpenRouterProvider
 from connect.registry import default_provider_registry
 from connect.types import (
     AssistantMessage,
@@ -78,7 +78,11 @@ def _chatgpt_token(account_id: str = "acct_test") -> str:
 
 
 def test_default_provider_registry_exposes_implemented_providers() -> None:
-    assert default_provider_registry.list() == ["chatgpt", "openai", "openrouter"]
+    assert default_provider_registry.list() == ["chatgpt", "gemini", "openai", "openrouter"]
+
+
+def test_gemini_provider_is_registered() -> None:
+    assert isinstance(default_provider_registry.get("gemini"), GeminiProvider)
 
 
 def test_chatgpt_build_headers_and_payload_use_account_and_instructions() -> None:

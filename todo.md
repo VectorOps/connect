@@ -1,11 +1,26 @@
 # Implementation Plan
 
+## Status snapshot
+
+- The core package is implemented under `src/connect/` with typed public models, transport helpers, registry/model loading, and the async client API.
+- Implemented providers: OpenAI, OpenRouter, and ChatGPT.
+- Implemented auth layers include API-key auth, bearer/query auth helpers, dynamic auth routing, environment resolution, and OAuth2 credential storage/refresh flows for ChatGPT.
+- Built-in generated model metadata already includes OpenAI, ChatGPT, Anthropic, Gemini, and OpenRouter model records in `src/connect/data/models.json`.
+- Existing tests cover transport helpers, client/registry behavior, OpenAI-family providers, and ChatGPT credentials.
+- Remaining phase-1 work is to implement the Anthropic and Gemini providers plus usage helpers and the corresponding tests.
+
+## Note
+
+- This file began as a forward-looking implementation plan. The architectural sections below are still useful, but the repository is now materially ahead of the original bootstrap-state notes.
+
 ## Current repository state
 
-- `docs/design.md` is the implementation spec.
-- The package currently only contains `src/connect/__init__.py` and `src/connect/py.typed`.
-- `pyproject.toml` defines the package but has no runtime dependencies yet.
-- There are no test files or supporting package modules in the main repository.
+- `docs/design.md` remains the implementation spec.
+- The package already contains the shared client/runtime layers: `client.py`, `types.py`, `exceptions.py`, `registry.py`, `models.py`, `auth.py`, `auth_router.py`, transport modules, and credential helpers.
+- Provider modules currently implemented are `openai.py`, `openrouter.py`, and `chatgpt.py`.
+- OAuth2 credential management is present under `src/connect/credentials/`, including ChatGPT login/refresh support.
+- The checked-in generated model registry already ships data for the initial provider set, including Gemini and Anthropic model metadata.
+- The test suite already includes transport, registry, client, OpenAI-family provider, and credential coverage.
 
 ## Guidelines
 
