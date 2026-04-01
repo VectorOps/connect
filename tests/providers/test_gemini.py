@@ -39,6 +39,22 @@ class _FakeStreamResponse:
             yield json.dumps(chunk).encode("utf-8")
 
 
+class _FakeArrayStreamResponse:
+    def __init__(self, chunks: list[list[dict]], request_id: str = "req_gemini") -> None:
+        self._chunks = chunks
+        self.request_id = request_id
+
+    async def __aenter__(self) -> _FakeArrayStreamResponse:
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        return None
+
+    async def iter_bytes(self):
+        for chunk in self._chunks:
+            yield json.dumps(chunk).encode("utf-8")
+
+
 class _FakeHttpTransport:
     def __init__(self, response: _FakeStreamResponse) -> None:
         self.response = response
@@ -225,6 +241,16 @@ def test_gemini_build_payload_uses_gemini3_disable_rules() -> None:
     assert flash_payload["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "MINIMAL"}
 
 
+def test_gemini_build_payload_disables_default_thinking_when_not_requested() -> None:
+    provider = GeminiProvider()
+    model = _gemini_model(model="gemini-2.5-flash")
+    request = GenerateRequest(messages=[UserMessage(content="hi")])
+
+    payload = provider.build_payload(model, request, RequestOptions())
+
+    assert payload["generationConfig"]["thinkingConfig"] == {"thinkingBudget": 0}
+
+
 @pytest.mark.asyncio
 async def test_gemini_stream_response_normalizes_reasoning_tool_calls_and_usage() -> None:
     provider = GeminiProvider()
@@ -393,3 +419,52 @@ async def test_gemini_stream_response_normalizes_duplicate_tool_call_ids() -> No
     tool_calls = events[-1].response.content
     assert tool_calls[0].id == "dup"
     assert tool_calls[1].id != "dup"
+
+
+@pytest.mark.asyncio
+async def test_gemini_stream_response_accepts_array_payloads_from_live_api() -> None:
+    provider = GeminiProvider()
+    model = _gemini_model(model="gemini-2.5-flash")
+    request = GenerateRequest(messages=[UserMessage(content="hello")])
+    response = _FakeArrayStreamResponse(
+        [
+            [
+                {
+                    "responseId": "resp_array",
+                    "candidates": [
+                        {
+                            "content": {"parts": [{"text": "streamed"}]},
+                            "finishReason": "STOP",
+                        }
+                    ],
+                    "usageMetadata": {
+                        "promptTokenCount": 2,
+                        "candidatesTokenCount": 1,
+                        "totalTokenCount": 3,
+                    },
+                }
+            ]
+        ]
+    )
+
+    events = [
+        event
+        async for event in provider.stream_response(
+            model=model,
+            request=request,
+            options=RequestOptions(),
+            http=_FakeHttpTransport(response),
+        )
+    ]
+
+    assert [event.type for event in events] == [
+        "response_start",
+        "text_start",
+        "text_delta",
+        "usage",
+        "text_end",
+        "usage",
+        "response_end",
+    ]
+    assert events[-1].response.response_id == "resp_array"
+    assert events[-1].response.content[0].text == "streamed"

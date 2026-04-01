@@ -206,72 +206,63 @@ class GeminiProvider(BaseProviderAdapter):
             yield assembler.response_start()
 
             try:
-                async for chunk in iter_json_values(
+                async for payload_chunk in iter_json_values(
                     response.iter_bytes(),
                     provider=self.provider_name,
                     api_family=model.api_family,
                 ):
-                    if not isinstance(chunk, dict):
-                        raise ProviderProtocolError(
-                            make_error_info(
-                                code="invalid_gemini_chunk",
-                                message="Gemini stream emitted a non-object JSON value",
-                                provider=self.provider_name,
-                                api_family=model.api_family,
-                                raw={"chunk": chunk},
-                            )
-                        )
+                    for chunk in self._iter_stream_chunks(payload_chunk, model=model):
 
-                    error_payload = chunk.get("error")
-                    if isinstance(error_payload, dict):
-                        yield assembler.error(self.build_error(error_payload))
-                        return
-
-                    response_id = chunk.get("responseId")
-                    if isinstance(response_id, str) and response_id:
-                        assembler.response_id = response_id
-                        assembler.update_protocol_state(gemini_response_id=response_id)
-
-                    model_version = chunk.get("modelVersion")
-                    if isinstance(model_version, str) and model_version:
-                        assembler.update_provider_meta(gemini_model_version=model_version)
-
-                    usage_payload = chunk.get("usageMetadata")
-                    partial_usage: Usage | None = None
-                    if isinstance(usage_payload, dict):
-                        last_usage_payload = usage_payload
-                        partial_usage = self.build_usage(usage_payload, completeness="partial")
-
-                    prompt_feedback = chunk.get("promptFeedback")
-                    if isinstance(prompt_feedback, dict) and prompt_feedback.get("blockReason"):
-                        finish_reason = "content_filter"
-
-                    candidates = chunk.get("candidates")
-                    candidate = candidates[0] if isinstance(candidates, list) and candidates else None
-                    if not isinstance(candidate, dict):
-                        continue
-
-                    candidate_finish_reason = self.normalize_finish_reason(candidate.get("finishReason"))
-                    if candidate_finish_reason != "unknown":
-                        finish_reason = candidate_finish_reason
-
-                    content = candidate.get("content")
-                    parts = content.get("parts") if isinstance(content, dict) else None
-                    if not isinstance(parts, list):
-                        continue
-
-                    for emitted_event in self._consume_parts(
-                        parts,
-                        model=model,
-                        assembler=assembler,
-                        part_states=part_states,
-                    ):
-                        yield emitted_event
-                        if isinstance(emitted_event, ResponseEndEvent) or emitted_event.type == "error":
+                        error_payload = chunk.get("error")
+                        if isinstance(error_payload, dict):
+                            yield assembler.error(self.build_error(error_payload))
                             return
 
-                    if partial_usage is not None:
-                        yield assembler.set_usage(partial_usage)
+                        response_id = chunk.get("responseId")
+                        if isinstance(response_id, str) and response_id:
+                            assembler.response_id = response_id
+                            assembler.update_protocol_state(gemini_response_id=response_id)
+
+                        model_version = chunk.get("modelVersion")
+                        if isinstance(model_version, str) and model_version:
+                            assembler.update_provider_meta(gemini_model_version=model_version)
+
+                        usage_payload = chunk.get("usageMetadata")
+                        partial_usage: Usage | None = None
+                        if isinstance(usage_payload, dict):
+                            last_usage_payload = usage_payload
+                            partial_usage = self.build_usage(usage_payload, completeness="partial")
+
+                        prompt_feedback = chunk.get("promptFeedback")
+                        if isinstance(prompt_feedback, dict) and prompt_feedback.get("blockReason"):
+                            finish_reason = "content_filter"
+
+                        candidates = chunk.get("candidates")
+                        candidate = candidates[0] if isinstance(candidates, list) and candidates else None
+                        if not isinstance(candidate, dict):
+                            continue
+
+                        candidate_finish_reason = self.normalize_finish_reason(candidate.get("finishReason"))
+                        if candidate_finish_reason != "unknown":
+                            finish_reason = candidate_finish_reason
+
+                        content = candidate.get("content")
+                        parts = content.get("parts") if isinstance(content, dict) else None
+                        if not isinstance(parts, list):
+                            continue
+
+                        for emitted_event in self._consume_parts(
+                            parts,
+                            model=model,
+                            assembler=assembler,
+                            part_states=part_states,
+                        ):
+                            yield emitted_event
+                            if isinstance(emitted_event, ResponseEndEvent) or emitted_event.type == "error":
+                                return
+
+                        if partial_usage is not None:
+                            yield assembler.set_usage(partial_usage)
             except ProviderProtocolError as exc:
                 yield assembler.error(exc.error)
                 return
@@ -402,7 +393,7 @@ class GeminiProvider(BaseProviderAdapter):
     def _build_thinking_config(self, model: ModelSpec, request: GenerateRequest) -> dict[str, Any] | None:
         reasoning = request.reasoning
         if reasoning is None:
-            return None
+            return self._disabled_thinking_config(model)
         if reasoning.enabled is False or reasoning.effort == "none":
             return self._disabled_thinking_config(model)
 
@@ -585,6 +576,34 @@ class GeminiProvider(BaseProviderAdapter):
 
     def _encode_tool_arguments(self, arguments: dict[str, Any]) -> str:
         return json.dumps(arguments or {}, separators=(",", ":"), sort_keys=True)
+
+    def _iter_stream_chunks(self, payload: Any, *, model: ModelSpec) -> list[dict[str, Any]]:
+        if isinstance(payload, dict):
+            return [payload]
+        if isinstance(payload, list):
+            chunks: list[dict[str, Any]] = []
+            for item in payload:
+                if not isinstance(item, dict):
+                    raise ProviderProtocolError(
+                        make_error_info(
+                            code="invalid_gemini_chunk",
+                            message="Gemini stream emitted a non-object JSON value",
+                            provider=self.provider_name,
+                            api_family=model.api_family,
+                            raw={"chunk": item},
+                        )
+                    )
+                chunks.append(item)
+            return chunks
+        raise ProviderProtocolError(
+            make_error_info(
+                code="invalid_gemini_chunk",
+                message="Gemini stream emitted a non-object JSON value",
+                provider=self.provider_name,
+                api_family=model.api_family,
+                raw={"chunk": payload},
+            )
+        )
 
     def _gemini_major_version(self, model: ModelSpec) -> int | None:
         model_name = model.model.lower()
