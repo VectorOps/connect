@@ -17,7 +17,7 @@ from connect import (
     ToolSpec,
     UserMessage,
 )
-from connect.auth_env import resolve_transport_auth_from_env
+from connect.auth_env import resolve_env_auth
 
 
 pytestmark = [
@@ -39,7 +39,7 @@ def _require_anthropic_key() -> None:
 
 
 def _anthropic_auth():
-    auth = resolve_transport_auth_from_env("anthropic", env=os.environ)
+    auth = resolve_env_auth("anthropic", env=os.environ)
     assert auth is not None, "ANTHROPIC_API_KEY must resolve to transport auth"
     return auth
 

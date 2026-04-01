@@ -18,6 +18,7 @@ from connect.credentials import (
     ChatGPTOAuthSettings,
     CredentialManager,
     CredentialStore,
+    FileCredentialManager,
     OAuth2RefreshableAuth,
     OAuthCredentials,
     OAuthAuthInfo,
@@ -75,7 +76,7 @@ def test_build_chatgpt_authorization_url_contains_expected_query_params() -> Non
 
 
 def test_credential_store_save_and_load_round_trip(tmp_path: pathlib.Path) -> None:
-    manager = CredentialManager()
+    manager = FileCredentialManager(tmp_path / "credentials.json")
     path = tmp_path / "credentials.json"
     credentials = ChatGPTCredentials(
         access_token=_jwt(),
@@ -84,8 +85,8 @@ def test_credential_store_save_and_load_round_trip(tmp_path: pathlib.Path) -> No
         account_id="acct_123",
     )
 
-    manager.save(path, credentials)
-    loaded = manager.load("chatgpt", path)
+    asyncio.run(manager.set("chatgpt", credentials))
+    loaded = asyncio.run(manager.get("chatgpt"))
 
     assert isinstance(loaded, ChatGPTCredentials)
     assert loaded.access_token == credentials.access_token
@@ -110,7 +111,7 @@ async def test_credential_manager_auth_from_file_refreshes_expired_credentials(t
 
     registry = CredentialRegistry()
     registry.register(_Provider())
-    manager = CredentialManager(registry=registry, store=store)
+    manager = FileCredentialManager(path, registry=registry, store=store)
     store.save(
         path,
         ChatGPTCredentials(
@@ -121,12 +122,12 @@ async def test_credential_manager_auth_from_file_refreshes_expired_credentials(t
         ),
     )
 
-    auth = manager.auth_from_file("chatgpt", path)
+    auth = await manager.auth("chatgpt")
     resolved = await auth.resolve()
 
     assert resolved.headers["Authorization"].startswith("Bearer ")
     assert resolved.headers["chatgpt-account-id"] == "acct_new"
-    loaded = manager.load("chatgpt", path)
+    loaded = await manager.get("chatgpt")
     assert loaded.account_id == "acct_new"
 
 
@@ -147,7 +148,7 @@ async def test_chatgpt_credential_provider_to_auth_returns_chatgpt_auth() -> Non
 
 
 @pytest.mark.asyncio
-async def test_credential_manager_auth_from_file_or_login_creates_credentials_when_missing(tmp_path: pathlib.Path) -> None:
+async def test_file_credential_manager_login_creates_credentials_when_missing(tmp_path: pathlib.Path) -> None:
     path = tmp_path / "credentials.json"
 
     class _Provider(ChatGPTCredentialProvider):
@@ -164,16 +165,43 @@ async def test_credential_manager_auth_from_file_or_login_creates_credentials_wh
 
     registry = CredentialRegistry()
     registry.register(_Provider())
-    manager = CredentialManager(registry=registry)
-    auth = manager.auth_from_file_or_login(
+    manager = FileCredentialManager(path, registry=registry)
+    credentials = await manager.login(
         "chatgpt",
-        path,
-        login_callbacks_factory=lambda provider: build_console_login_callbacks(provider=provider, env={}),
+        build_console_login_callbacks(provider="chatgpt", env={}),
     )
-    resolved = await auth.resolve()
+    resolved = await manager.resolve("chatgpt")
 
     assert path.exists()
+    assert credentials.account_id == "acct_login"
     assert resolved.headers["chatgpt-account-id"] == "acct_login"
+
+
+@pytest.mark.asyncio
+async def test_in_memory_credential_manager_login_and_resolve() -> None:
+    class _Provider(ChatGPTCredentialProvider):
+        async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
+            return ChatGPTCredentials(
+                access_token=_jwt("acct_memory"),
+                refresh_token="refresh_memory",
+                expires_at=time.time() + 600,
+                account_id="acct_memory",
+            )
+
+    from connect.credentials.base import CredentialRegistry
+
+    registry = CredentialRegistry()
+    registry.register(_Provider())
+    manager = CredentialManager(registry=registry)
+
+    credentials = await manager.login(
+        "chatgpt",
+        build_console_login_callbacks(provider="chatgpt", env={}),
+    )
+    resolved = await manager.resolve("chatgpt")
+
+    assert credentials.account_id == "acct_memory"
+    assert resolved.headers["chatgpt-account-id"] == "acct_memory"
 
 
 @pytest.mark.asyncio

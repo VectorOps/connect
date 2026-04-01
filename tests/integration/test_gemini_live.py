@@ -17,7 +17,7 @@ from connect import (
     ToolSpec,
     UserMessage,
 )
-from connect.auth_env import resolve_transport_auth_from_env
+from connect.auth_env import resolve_env_auth
 
 
 pytestmark = [
@@ -41,7 +41,7 @@ def _require_gemini_key() -> None:
 
 
 def _gemini_auth():
-    auth = resolve_transport_auth_from_env("gemini", env=os.environ)
+    auth = resolve_env_auth("gemini", env=os.environ)
     assert auth is not None, "Gemini auth could not be resolved from environment"
     return auth
 

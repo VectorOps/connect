@@ -9,7 +9,7 @@ import pytest
 from connect import AsyncLLMClient, GenerateRequest, RequestOptions, UserMessage
 from connect.credentials import (
     DEFAULT_MANUAL_REDIRECT_URL,
-    CredentialManager,
+    FileCredentialManager,
     OAuthAuthInfo,
     OAuthLoginCallbacks,
     OAuthPrompt,
@@ -34,10 +34,10 @@ pytestmark = [
 
 @pytest.mark.asyncio
 async def test_chatgpt_oauth_login_live() -> None:
-    manager = CredentialManager()
+    persist_path = pathlib.Path(tempfile.gettempdir()) / "connect-chatgpt-oauth-test.json"
+    manager = FileCredentialManager(persist_path)
     seen: list[OAuthAuthInfo] = []
     redirect_url = os.getenv("CHATGPT_OAUTH_REDIRECT_URL", DEFAULT_MANUAL_REDIRECT_URL)
-    persist_path = pathlib.Path(tempfile.gettempdir()) / "connect-chatgpt-oauth-test.json"
 
     async def _prompt(prompt: OAuthPrompt) -> str:
         return redirect_url
@@ -52,7 +52,6 @@ async def test_chatgpt_oauth_login_live() -> None:
             on_auth=_on_auth,
             on_prompt=_prompt,
         ),
-        persist_path=persist_path,
     )
 
     assert seen
@@ -71,7 +70,7 @@ async def test_chatgpt_oauth_login_live() -> None:
                 max_output_tokens=16,
             ),
             options=RequestOptions(
-                auth=manager.auth_from_file("chatgpt", persist_path),
+                auth=await manager.auth("chatgpt"),
                 provider_options={"session_id": "connect-integration-chatgpt-oauth-e2e"},
             ),
         )

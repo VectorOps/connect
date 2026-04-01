@@ -218,32 +218,51 @@ class CredentialManager:
     ) -> None:
         self.registry = registry or build_default_credential_registry()
         self.store = store or CredentialStore()
+        self._credentials: dict[str, OAuth2Credentials] = {}
+
+    async def get(self, provider: str) -> OAuth2Credentials | None:
+        return self._credentials.get(provider)
+
+    async def set(self, provider: str, credentials: OAuth2Credentials | None) -> None:
+        if credentials is None:
+            self._credentials.pop(provider, None)
+            return
+        self._credentials[provider] = credentials
 
     async def login(
         self,
         provider: str,
         callbacks: OAuthLoginCallbacks,
-        *,
-        persist_path: str | pathlib.Path | None = None,
     ) -> OAuth2Credentials:
         adapter = self.registry.get(provider)
         credentials = await adapter.login(callbacks)
-        if persist_path is not None:
-            self.store.save(persist_path, credentials)
+        await self.set(provider, credentials)
         return credentials
 
     async def refresh(
         self,
         provider: str,
         credentials: OAuthCredentials,
-        *,
-        persist_path: str | pathlib.Path | None = None,
     ) -> OAuth2Credentials:
         adapter = self.registry.get(provider)
         refreshed = await adapter.refresh(credentials)
-        if persist_path is not None:
-            self.store.save(persist_path, refreshed)
+        await self.set(provider, refreshed)
         return refreshed
+
+    async def resolve(self, provider: str) -> ResolvedAuth:
+        auth = await self.auth(provider)
+        return await auth.resolve()
+
+    async def auth(self, provider: str) -> OAuth2RefreshableAuth:
+        adapter = self.registry.get(provider)
+        credentials = await self.get(provider)
+        if credentials is None:
+            raise ValueError(f"No stored credentials for provider '{provider}'")
+        return OAuth2RefreshableAuth(
+            provider=adapter,
+            credentials=credentials,
+            persist_callback=lambda updated: self.set(provider, updated),
+        )
 
     def save(self, path: str | pathlib.Path, credentials: OAuthCredentials) -> None:
         self.store.save(path, credentials)
@@ -251,22 +270,39 @@ class CredentialManager:
     def load(self, provider: str, path: str | pathlib.Path) -> OAuthCredentials:
         return self.store.load(path, provider=provider, registry=self.registry)
 
-    def auth_from_file(self, provider: str, path: str | pathlib.Path) -> PersistedCredentialAuth:
-        return PersistedCredentialAuth(provider=self.registry.get(provider), store=self.store, path=path)
 
-    def auth_from_file_or_login(
+class FileCredentialManager(CredentialManager):
+    def __init__(
         self,
-        provider: str,
         path: str | pathlib.Path,
         *,
-        login_callbacks_factory: LoginCallbacksFactory,
-    ) -> PersistedCredentialAuth:
-        return PersistedCredentialAuth(
-            provider=self.registry.get(provider),
-            store=self.store,
-            path=path,
-            login_callbacks_factory=login_callbacks_factory,
-            auto_login_if_missing=True,
+        registry: CredentialRegistry | None = None,
+        store: CredentialStore | None = None,
+    ) -> None:
+        super().__init__(registry=registry, store=store)
+        self.path = pathlib.Path(path)
+
+    async def get(self, provider: str) -> OAuth2Credentials | None:
+        try:
+            return self.load(provider, self.path)
+        except ValueError:
+            return None
+
+    async def set(self, provider: str, credentials: OAuth2Credentials | None) -> None:
+        if credentials is None:
+            self.store.delete(self.path, provider=provider)
+            return
+        self.store.save(self.path, credentials)
+
+    async def auth(self, provider: str) -> OAuth2RefreshableAuth:
+        adapter = self.registry.get(provider)
+        credentials = await self.get(provider)
+        if credentials is None:
+            raise ValueError(f"No stored credentials for provider '{provider}'")
+        return OAuth2RefreshableAuth(
+            provider=adapter,
+            credentials=credentials,
+            persist_callback=lambda updated: self.set(provider, updated),
         )
 
 

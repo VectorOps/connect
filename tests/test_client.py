@@ -6,7 +6,7 @@ import pytest
 
 from connect.auth import AuthContext, ResolvedAuth
 from connect.auth import BearerTokenAuth
-from connect.auth_env import resolve_transport_auth_from_env
+from connect.auth_env import resolve_env_auth
 from connect.auth_router import DynamicAuthRouter, EnvironmentCredentialManager
 from connect.client import AsyncLLMClient, StreamHandle
 from connect.credentials import ChatGPTCredentials, CredentialManager, OAuthLoginCallbacks, OAuthPrompt
@@ -156,8 +156,8 @@ def test_credential_manager_registers_chatgpt_provider_by_default() -> None:
     assert "chatgpt" in manager.registry.list()
 
 
-def test_resolve_transport_auth_from_env_returns_openai_auth() -> None:
-    auth = resolve_transport_auth_from_env("openai", env={"OPENAI_API_KEY": "sk-test"})
+def test_resolve_env_auth_returns_openai_auth() -> None:
+    auth = resolve_env_auth("openai", env={"OPENAI_API_KEY": "sk-test"})
 
     assert isinstance(auth, BearerTokenAuth)
 

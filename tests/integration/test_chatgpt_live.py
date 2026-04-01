@@ -7,7 +7,7 @@ import tempfile
 import pytest
 
 from connect import AsyncLLMClient, GenerateRequest, RequestOptions, UserMessage
-from connect.auth_env import resolve_transport_auth_from_env
+from connect.auth_env import resolve_env_auth
 
 
 pytestmark = [
@@ -36,7 +36,7 @@ def _text_from_response(response) -> str:
 
 
 def _chatgpt_auth():
-    auth = resolve_transport_auth_from_env(
+    auth = resolve_env_auth(
         "chatgpt",
         env={
             **os.environ,

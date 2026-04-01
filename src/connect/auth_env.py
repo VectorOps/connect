@@ -5,7 +5,7 @@ import typing
 
 from .auth import BearerTokenAuth, ChatGPTAccessTokenAuth, HeaderAPIKeyAuth, TransportAuth
 from .auth_router import DynamicAuthRouter, EnvironmentCredentialManager
-from .credentials.base import CredentialManager, build_console_login_callbacks
+from .credentials.base import FileCredentialManager, build_console_login_callbacks
 
 
 def openai_api_key_from_env(env: typing.Mapping[str, str] | None = None) -> BearerTokenAuth | None:
@@ -54,19 +54,30 @@ def chatgpt_credentials_file_auth(env: typing.Mapping[str, str] | None = None) -
     if not path:
         return None
 
-    manager = CredentialManager()
-    return manager.auth_from_file_or_login(
-        "chatgpt",
-        path,
-        login_callbacks_factory=lambda provider: build_console_login_callbacks(
-            provider=provider,
-            env=source,
-            manual_input_env_vars=("CHATGPT_OAUTH_REDIRECT_URL",),
-        ),
-    )
+    manager = FileCredentialManager(path)
+
+    class _ManagerBackedAuth:
+        async def resolve(self, context=None):
+            credentials = await manager.get("chatgpt")
+            if credentials is None:
+                await manager.login(
+                    "chatgpt",
+                    build_console_login_callbacks(
+                        provider="chatgpt",
+                        env=source,
+                        manual_input_env_vars=("CHATGPT_OAUTH_REDIRECT_URL",),
+                    ),
+                )
+            return await manager.resolve("chatgpt")
+
+        async def refresh(self, context=None) -> bool:
+            auth = await manager.auth("chatgpt")
+            return await auth.refresh(context)
+
+    return _ManagerBackedAuth()
 
 
-def resolve_transport_auth_from_env(
+def resolve_env_auth(
     provider: str | None = None,
     *,
     model: str | None = None,

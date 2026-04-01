@@ -12,8 +12,6 @@ The project provides:
 - registry-driven model metadata
 - normalized streaming events and usage tracking
 
-Supported providers: OpenAI, ChatGPT, Anthropic, Gemini, and OpenRouter.
-
 Supported providers
 -------------------
 
@@ -43,6 +41,8 @@ Quick start
 
 The main entry point is `AsyncLLMClient`. You can call `generate()` for a complete response or `stream()` for incremental events.
 
+If you do not pass `options.auth`, the client automatically falls back to environment-based credential resolution through its default auth router. That means provider credentials from environment variables or configured credential files can be picked up without passing an explicit auth object on every call.
+
 Simplified example
 ------------------
 
@@ -50,11 +50,11 @@ Simplified example
 import asyncio
 
 from connect import AsyncLLMClient, GenerateRequest, RequestOptions, UserMessage
-from connect.auth_env import resolve_transport_auth_from_env
+from connect.auth_env import resolve_env_auth
 
 
 async def main() -> None:
-    auth = resolve_transport_auth_from_env("openai")
+    auth = resolve_env_auth("openai")
     if auth is None:
         raise RuntimeError("OPENAI_API_KEY is not set")
 
@@ -83,11 +83,11 @@ Streaming example
 import asyncio
 
 from connect import AsyncLLMClient, GenerateRequest, RequestOptions, UserMessage
-from connect.auth_env import resolve_transport_auth_from_env
+from connect.auth_env import resolve_env_auth
 
 
 async def main() -> None:
-    auth = resolve_transport_auth_from_env("anthropic")
+    auth = resolve_env_auth("anthropic")
     if auth is None:
         raise RuntimeError("ANTHROPIC_API_KEY is not set")
 
@@ -159,16 +159,29 @@ Example:
 
 ```python
 from connect import AsyncLLMClient, GenerateRequest, RequestOptions, UserMessage
-from connect.auth_env import resolve_transport_auth_from_env
+from connect.auth_env import resolve_env_auth
 
 
-auth = resolve_transport_auth_from_env("gemini")
+auth = resolve_env_auth("gemini")
 
 async with AsyncLLMClient() as client:
     response = await client.generate(
         "gemini/gemini-2.5-flash",
         GenerateRequest(messages=[UserMessage(content="Say hello")]),
         options=RequestOptions(auth=auth),
+    )
+```
+
+If you omit `options.auth`, the client will try default environment-based auth resolution automatically. For example, this works when `OPENAI_API_KEY` is set:
+
+```python
+from connect import AsyncLLMClient, GenerateRequest, UserMessage
+
+
+async with AsyncLLMClient() as client:
+    response = await client.generate(
+        "openai/gpt-4.1-mini",
+        GenerateRequest(messages=[UserMessage(content="Say hello")]),
     )
 ```
 
@@ -206,23 +219,20 @@ Short example:
 import asyncio
 from pathlib import Path
 
-from connect.credentials import CredentialManager, build_console_login_callbacks
+from connect.credentials import FileCredentialManager, build_console_login_callbacks
 
 
 async def main() -> None:
-    manager = CredentialManager()
-    path = Path(".secrets/chatgpt-credentials.json")
+    manager = FileCredentialManager(Path(".secrets/chatgpt-credentials.json"))
 
     credentials = await manager.login(
         "chatgpt",
         build_console_login_callbacks(provider="chatgpt"),
-        persist_path=path,
     )
 
     print("stored account id:", credentials.account_id)
 
-    auth = manager.auth_from_file("chatgpt", path)
-    resolved = await auth.resolve()
+    resolved = await manager.resolve("chatgpt")
     print("auth headers:", sorted(resolved.headers))
 
 
@@ -236,10 +246,10 @@ export CHATGPT_CREDENTIALS_FILE=.secrets/chatgpt-credentials.json
 ```
 
 ```python
-from connect.auth_env import resolve_transport_auth_from_env
+from connect.auth_env import resolve_env_auth
 
 
-auth = resolve_transport_auth_from_env("chatgpt")
+auth = resolve_env_auth("chatgpt")
 ```
 
 Note:
