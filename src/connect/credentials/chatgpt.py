@@ -8,9 +8,8 @@ import urllib.parse
 import aiohttp
 import pydantic
 
-from ..auth import ChatGPTAccessTokenAuth, extract_chatgpt_account_id
-from ..types import AuthStrategy
-from .base import CredentialProvider, OAuthAuthInfo, OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt
+from ..auth import ResolvedAuth, extract_chatgpt_account_id
+from .base import CredentialProvider, OAuth2Credentials, OAuthAuthInfo, OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt
 from .helpers import LocalOAuthCallbackServer, create_oauth_state, generate_pkce_pair, parse_authorization_input
 
 
@@ -27,9 +26,9 @@ DEFAULT_MANUAL_REDIRECT_URL = (
 )
 
 
-class ChatGPTCredentials(OAuthCredentials):
+class ChatGPTCredentials(OAuth2Credentials):
     provider: typing.Literal["chatgpt"] = "chatgpt"
-    account_id: str
+    account_id: str | None = None
 
 
 class ChatGPTOAuthSettings(pydantic.BaseModel):
@@ -287,7 +286,11 @@ class ChatGPTCredentialProvider:
             credentials = ChatGPTCredentials.model_validate(credentials.model_dump(mode="json"))
         return await refresh_chatgpt_access_token(credentials.refresh_token)
 
-    def to_auth(self, credentials: OAuthCredentials) -> AuthStrategy:
+    def build_resolved_auth(self, credentials: OAuth2Credentials) -> ResolvedAuth:
         if not isinstance(credentials, ChatGPTCredentials):
             credentials = ChatGPTCredentials.model_validate(credentials.model_dump(mode="json"))
-        return ChatGPTAccessTokenAuth(credentials.access_token, credentials.account_id)
+        account_id = credentials.account_id or extract_chatgpt_account_id(credentials.access_token)
+        headers = {"Authorization": f"Bearer {credentials.access_token}"}
+        if account_id:
+            headers["chatgpt-account-id"] = account_id
+        return ResolvedAuth(headers=headers)

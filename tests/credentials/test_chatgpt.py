@@ -9,13 +9,16 @@ import urllib.parse
 
 import pytest
 
-from connect.auth import ChatGPTAccessTokenAuth
+from connect.auth import ResolvedAuth
+from connect.auth_router import EnvironmentCredentialManager
+from connect.auth_env import chatgpt_access_token_from_env
 from connect.credentials import (
     ChatGPTCredentialProvider,
     ChatGPTCredentials,
     ChatGPTOAuthSettings,
     CredentialManager,
     CredentialStore,
+    OAuth2RefreshableAuth,
     OAuthCredentials,
     OAuthAuthInfo,
     OAuthLoginCallbacks,
@@ -119,11 +122,10 @@ async def test_credential_manager_auth_from_file_refreshes_expired_credentials(t
     )
 
     auth = manager.auth_from_file("chatgpt", path)
-    request = type("Request", (), {"headers": {}, "params": {}})()
-    await auth.apply(request)
+    resolved = await auth.resolve()
 
-    assert request.headers["Authorization"].startswith("Bearer ")
-    assert request.headers["chatgpt-account-id"] == "acct_new"
+    assert resolved.headers["Authorization"].startswith("Bearer ")
+    assert resolved.headers["chatgpt-account-id"] == "acct_new"
     loaded = manager.load("chatgpt", path)
     assert loaded.account_id == "acct_new"
 
@@ -131,7 +133,7 @@ async def test_credential_manager_auth_from_file_refreshes_expired_credentials(t
 @pytest.mark.asyncio
 async def test_chatgpt_credential_provider_to_auth_returns_chatgpt_auth() -> None:
     provider = ChatGPTCredentialProvider()
-    auth = provider.to_auth(
+    auth = provider.build_resolved_auth(
         ChatGPTCredentials(
             access_token=_jwt("acct_555"),
             refresh_token="refresh_555",
@@ -140,8 +142,8 @@ async def test_chatgpt_credential_provider_to_auth_returns_chatgpt_auth() -> Non
         )
     )
 
-    assert isinstance(auth, ChatGPTAccessTokenAuth)
-    assert auth.account_id == "acct_555"
+    assert isinstance(auth, ResolvedAuth)
+    assert auth.headers["chatgpt-account-id"] == "acct_555"
 
 
 @pytest.mark.asyncio
@@ -168,12 +170,49 @@ async def test_credential_manager_auth_from_file_or_login_creates_credentials_wh
         path,
         login_callbacks_factory=lambda provider: build_console_login_callbacks(provider=provider, env={}),
     )
-    request = type("Request", (), {"headers": {}, "params": {}})()
-
-    await auth.apply(request)
+    resolved = await auth.resolve()
 
     assert path.exists()
-    assert request.headers["chatgpt-account-id"] == "acct_login"
+    assert resolved.headers["chatgpt-account-id"] == "acct_login"
+
+
+@pytest.mark.asyncio
+async def test_oauth2_refreshable_auth_refreshes_expired_credentials() -> None:
+    saved: list[ChatGPTCredentials] = []
+
+    class _Provider(ChatGPTCredentialProvider):
+        async def refresh(self, credentials):
+            return ChatGPTCredentials(
+                access_token=_jwt("acct_refreshed"),
+                refresh_token="refresh_refreshed",
+                expires_at=time.time() + 600,
+                account_id="acct_refreshed",
+            )
+
+    auth = OAuth2RefreshableAuth(
+        provider=_Provider(),
+        credentials=ChatGPTCredentials(
+            access_token=_jwt("acct_expired"),
+            refresh_token="refresh_expired",
+            expires_at=time.time() - 60,
+            account_id="acct_expired",
+        ),
+        persist_callback=saved.append,
+    )
+
+    resolved = await auth.resolve()
+
+    assert resolved.headers["chatgpt-account-id"] == "acct_refreshed"
+    assert saved[-1].account_id == "acct_refreshed"
+
+
+def test_chatgpt_access_token_from_env_returns_auth() -> None:
+    auth = chatgpt_access_token_from_env(
+        {"CHATGPT_ACCESS_TOKEN": _jwt("acct_env"), "CHATGPT_ACCOUNT_ID": "acct_env"}
+    )
+
+    assert auth is not None
+    assert auth.account_id == "acct_env"
 
 
 @pytest.mark.asyncio
@@ -210,3 +249,22 @@ async def test_chatgpt_login_uses_manual_prompt_when_callback_not_available(monk
     assert seen
     assert seen[0].url.startswith("https://auth.openai.com/oauth/authorize?")
     assert credentials.account_id == "acct_manual"
+
+
+@pytest.mark.asyncio
+async def test_environment_credential_manager_loads_and_saves_oauth_credentials(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "credentials.json"
+    manager = EnvironmentCredentialManager({"CHATGPT_CREDENTIALS_FILE": str(path)})
+    credentials = ChatGPTCredentials(
+        access_token=_jwt("acct_store"),
+        refresh_token="refresh_store",
+        expires_at=time.time() + 600,
+        account_id="acct_store",
+    )
+
+    await manager.set_oauth2_credentials("chatgpt", credentials)
+    loaded = await manager.get_oauth2_credentials("chatgpt")
+
+    assert loaded is not None
+    assert loaded.provider == "chatgpt"
+    assert loaded.access_token == credentials.access_token

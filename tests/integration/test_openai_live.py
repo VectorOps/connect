@@ -19,6 +19,7 @@ from connect import (
     ToolSpec,
     UserMessage,
 )
+from connect.auth_env import resolve_transport_auth_from_env
 
 
 pytestmark = [
@@ -37,6 +38,12 @@ RED_PIXEL_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVR4
 
 def _require_openai_key() -> None:
     assert os.getenv("OPENAI_API_KEY"), "OPENAI_API_KEY must be set when INTEGRATION_TEST is enabled"
+
+
+def _openai_auth():
+    auth = resolve_transport_auth_from_env("openai", env=os.environ)
+    assert auth is not None, "OPENAI_API_KEY must resolve to transport auth"
+    return auth
 
 
 def _text_from_response(response) -> str:
@@ -75,7 +82,7 @@ async def test_openai_generate_live() -> None:
                 messages=[UserMessage(content="Reply with exactly the word: pong")],
                 max_output_tokens=16,
             ),
-            options=RequestOptions(),
+            options=RequestOptions(auth=_openai_auth()),
         )
 
     text_blocks = [block for block in response.content if block.type == "text"]
@@ -98,7 +105,7 @@ async def test_openai_stream_live_emits_text_events_and_final_response() -> None
                 messages=[UserMessage(content="Reply with exactly the word: streamed")],
                 max_output_tokens=16,
             ),
-            options=RequestOptions(),
+            options=RequestOptions(auth=_openai_auth()),
         )
 
         event_types: list[str] = []
@@ -145,7 +152,7 @@ async def test_openai_json_schema_response_live() -> None:
                 ),
                 max_output_tokens=64,
             ),
-            options=RequestOptions(),
+            options=RequestOptions(auth=_openai_auth()),
         )
 
     payload = json.loads(_text_from_response(response))
@@ -177,7 +184,7 @@ async def test_openai_tool_call_and_tool_result_round_trip_live() -> None:
                 tool_choice=SpecificToolChoice(name="lookup_status"),
                 max_output_tokens=128,
             ),
-            options=RequestOptions(),
+            options=RequestOptions(auth=_openai_auth()),
         )
 
         tool_calls = _tool_calls_from_response(tool_response)
@@ -201,7 +208,7 @@ async def test_openai_tool_call_and_tool_result_round_trip_live() -> None:
                 system_prompt="Answer in one short sentence and include the exact status value.",
                 max_output_tokens=64,
             ),
-            options=RequestOptions(),
+            options=RequestOptions(auth=_openai_auth()),
         )
 
     final_text = _text_from_response(final_response).lower()
@@ -226,7 +233,7 @@ async def test_openai_multimodal_user_image_and_tool_result_image_live() -> None
                 ],
                 max_output_tokens=16,
             ),
-            options=RequestOptions(),
+            options=RequestOptions(auth=_openai_auth()),
         )
 
         image_text = _text_from_response(image_response).lower()
@@ -258,7 +265,7 @@ async def test_openai_multimodal_user_image_and_tool_result_image_live() -> None
                 ],
                 max_output_tokens=32,
             ),
-            options=RequestOptions(),
+            options=RequestOptions(auth=_openai_auth()),
         )
 
     tool_image_text = _text_from_response(tool_image_response).lower()

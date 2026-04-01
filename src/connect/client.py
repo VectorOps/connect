@@ -4,7 +4,8 @@ import typing
 
 import aiohttp
 
-from .auth import AuthRegistry, default_env_auth, resolve_request_auth
+from .auth import AuthContext, resolve_transport_auth
+from .auth_router import AuthCredentialManager, DynamicAuthRouter
 from .exceptions import ConnectError, exception_from_error_info
 from .registry import ModelRegistry, ProviderRegistry, default_model_registry, default_provider_registry
 from .transport import HttpTransport
@@ -55,11 +56,12 @@ class AsyncLLMClient:
         self,
         *,
         http_client: aiohttp.ClientSession | None = None,
-        auth_registry: AuthRegistry | None = None,
+        auth_router: DynamicAuthRouter | None = None,
+        credential_manager: AuthCredentialManager | None = None,
         model_registry: ModelRegistry | None = None,
         provider_registry: ProviderRegistry | None = None,
     ) -> None:
-        self.auth_registry = auth_registry or AuthRegistry()
+        self.auth_router = auth_router or DynamicAuthRouter(credential_manager=credential_manager)
         self.model_registry = model_registry or default_model_registry
         self.provider_registry = provider_registry or default_provider_registry
         self.http = HttpTransport(session=http_client)
@@ -107,8 +109,15 @@ class AsyncLLMClient:
         validate_request_for_model(resolved_model, request)
 
         provider_adapter = self.provider_registry.get(resolved_model.provider)
-        auth = options.auth or self.auth_registry.get(resolved_model.provider) or default_env_auth(resolved_model.provider)
-        headers, params = await resolve_request_auth(auth, headers=options.headers)
+        auth = options.auth or self.auth_router
+        auth_context = AuthContext(
+            provider=resolved_model.provider,
+            model=resolved_model.model,
+            api_family=resolved_model.api_family,
+        )
+        resolved_auth = await resolve_transport_auth(auth, context=auth_context)
+        headers = {**resolved_auth.headers, **options.headers}
+        params = resolved_auth.params
         effective_options = options.model_copy(
             update={
                 "auth": auth,
@@ -121,7 +130,7 @@ class AsyncLLMClient:
             model=resolved_model,
             request=request,
             options=effective_options,
-            http=_AuthAwareHttpTransport(self.http, query_params=params),
+            http=self.http,
         ):
             yield event
 
@@ -129,20 +138,6 @@ class AsyncLLMClient:
         if isinstance(model, ModelSpec):
             return model
         return self.model_registry.resolve(model, provider=provider)
-
-
-class _AuthAwareHttpTransport:
-    def __init__(self, http: HttpTransport, *, query_params: dict[str, str] | None = None) -> None:
-        self._http = http
-        self._query_params = dict(query_params or {})
-
-    async def stream(self, method: str, url: str, **kwargs):
-        params = kwargs.pop("params", None)
-        merged_params = dict(params or {})
-        merged_params.update({str(key): str(value) for key, value in self._query_params.items()})
-
-        return await self._http.stream(method, url, params=merged_params or None, **kwargs)
-
 
 async def generate(
     model: str | ModelSpec,

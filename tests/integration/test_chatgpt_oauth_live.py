@@ -7,7 +7,6 @@ import tempfile
 import pytest
 
 from connect import AsyncLLMClient, GenerateRequest, RequestOptions, UserMessage
-from connect.auth import ChatGPTAccessTokenAuth
 from connect.credentials import (
     DEFAULT_MANUAL_REDIRECT_URL,
     CredentialManager,
@@ -72,7 +71,7 @@ async def test_chatgpt_oauth_login_live() -> None:
                 max_output_tokens=16,
             ),
             options=RequestOptions(
-                auth=ChatGPTAccessTokenAuth(credentials.access_token, credentials.account_id),
+                auth=manager.auth_from_file("chatgpt", persist_path),
                 provider_options={"session_id": "connect-integration-chatgpt-oauth-e2e"},
             ),
         )

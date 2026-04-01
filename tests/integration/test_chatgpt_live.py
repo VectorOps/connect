@@ -7,6 +7,7 @@ import tempfile
 import pytest
 
 from connect import AsyncLLMClient, GenerateRequest, RequestOptions, UserMessage
+from connect.auth_env import resolve_transport_auth_from_env
 
 
 pytestmark = [
@@ -34,17 +35,30 @@ def _text_from_response(response) -> str:
     return "\n".join(block.text for block in response.content if block.type == "text")
 
 
+def _chatgpt_auth():
+    auth = resolve_transport_auth_from_env(
+        "chatgpt",
+        env={
+            **os.environ,
+            "CHATGPT_CREDENTIALS_FILE": str(_credentials_file_path()),
+        },
+    )
+    assert auth is not None, "ChatGPT auth could not be resolved"
+    return auth
+
+
 @pytest.mark.asyncio
 async def test_chatgpt_generate_live_uses_oauth_access_token() -> None:
-    os.environ.setdefault("CHATGPT_CREDENTIALS_FILE", str(_credentials_file_path()))
-
     async with AsyncLLMClient() as client:
         response = await client.generate(
             CHATGPT_TEXT_MODEL,
             GenerateRequest(
                 messages=[UserMessage(content="Reply with exactly the word: pong")],
             ),
-            options=RequestOptions(provider_options={"session_id": "connect-integration-chatgpt-generate"}),
+            options=RequestOptions(
+                auth=_chatgpt_auth(),
+                provider_options={"session_id": "connect-integration-chatgpt-generate"},
+            ),
         )
 
     text = _text_from_response(response).lower()
@@ -57,15 +71,16 @@ async def test_chatgpt_generate_live_uses_oauth_access_token() -> None:
 
 @pytest.mark.asyncio
 async def test_chatgpt_stream_live_emits_text_events_and_final_response() -> None:
-    os.environ.setdefault("CHATGPT_CREDENTIALS_FILE", str(_credentials_file_path()))
-
     async with AsyncLLMClient() as client:
         stream = client.stream(
             CHATGPT_TEXT_MODEL,
             GenerateRequest(
                 messages=[UserMessage(content="Reply with exactly the word: streamed")],
             ),
-            options=RequestOptions(provider_options={"session_id": "connect-integration-chatgpt-stream"}),
+            options=RequestOptions(
+                auth=_chatgpt_auth(),
+                provider_options={"session_id": "connect-integration-chatgpt-stream"},
+            ),
         )
 
         event_types: list[str] = []

@@ -9,6 +9,7 @@ from urllib.parse import urljoin, urlsplit
 
 import aiohttp
 
+from ..auth import AuthContext, TransportAuth, resolve_transport_auth
 from ..exceptions import exception_from_error_info, make_error_info
 
 
@@ -94,11 +95,13 @@ class HttpTransport:
         session: aiohttp.ClientSession | None = None,
         base_url: str | None = None,
         headers: Mapping[str, str] | None = None,
+        auth: TransportAuth | None = None,
     ) -> None:
         self._session = session or aiohttp.ClientSession()
         self._owns_session = session is None
         self._base_url = base_url
         self._headers = dict(headers or {})
+        self._auth = auth
 
     async def close(self) -> None:
         if self._owns_session and not self._session.closed:
@@ -116,23 +119,30 @@ class HttpTransport:
         url: str,
         *,
         provider: str | None = None,
+        model: str | None = None,
         api_family: str | None = None,
         params: Mapping[str, str] | None = None,
         headers: Mapping[str, str] | None = None,
+        auth: TransportAuth | None = None,
         json_body: Any = None,
         data: Any = None,
         timeout: float | aiohttp.ClientTimeout | None = None,
         expected_status: int | set[int] | None = None,
     ) -> HttpResponse:
         try:
-            response = await self._session.request(
+            response = await self._request_with_optional_refresh(
                 method,
-                self._resolve_url(url),
+                url,
+                provider=provider,
+                model=model,
+                api_family=api_family,
                 params=params,
-                headers=self._merge_headers(headers),
-                json=json_body,
+                headers=headers,
+                auth=auth,
+                json_body=json_body,
                 data=data,
-                timeout=self._normalize_timeout(timeout),
+                timeout=timeout,
+                expected_status=expected_status,
             )
             async with response:
                 await self._raise_for_status(
@@ -157,23 +167,30 @@ class HttpTransport:
         url: str,
         *,
         provider: str | None = None,
+        model: str | None = None,
         api_family: str | None = None,
         params: Mapping[str, str] | None = None,
         headers: Mapping[str, str] | None = None,
+        auth: TransportAuth | None = None,
         json_body: Any = None,
         data: Any = None,
         timeout: float | aiohttp.ClientTimeout | None = None,
         expected_status: int | set[int] | None = None,
     ) -> HttpStreamResponse:
         try:
-            response = await self._session.request(
+            response = await self._request_with_optional_refresh(
                 method,
-                self._resolve_url(url),
+                url,
+                provider=provider,
+                model=model,
+                api_family=api_family,
                 params=params,
-                headers=self._merge_headers(headers),
-                json=json_body,
+                headers=headers,
+                auth=auth,
+                json_body=json_body,
                 data=data,
-                timeout=self._normalize_timeout(timeout),
+                timeout=timeout,
+                expected_status=expected_status,
             )
             try:
                 await self._raise_for_status(
@@ -188,6 +205,84 @@ class HttpTransport:
             return HttpStreamResponse(response)
         except Exception as exc:
             raise self._map_transport_exception(exc, provider=provider, api_family=api_family) from exc
+
+    async def _request_with_optional_refresh(
+        self,
+        method: str,
+        url: str,
+        *,
+        provider: str | None,
+        model: str | None,
+        api_family: str | None,
+        params: Mapping[str, str] | None,
+        headers: Mapping[str, str] | None,
+        auth: TransportAuth | None,
+        json_body: Any,
+        data: Any,
+        timeout: float | aiohttp.ClientTimeout | None,
+        expected_status: int | set[int] | None,
+    ) -> aiohttp.ClientResponse:
+        resolved_auth = auth or self._auth
+        response = await self._perform_request(
+            method,
+            url,
+            context=AuthContext(provider=provider, model=model, api_family=api_family, method=method, url=url),
+            params=params,
+            headers=headers,
+            auth=resolved_auth,
+            json_body=json_body,
+            data=data,
+            timeout=timeout,
+        )
+        if response.status not in {401, 403} or resolved_auth is None:
+            return response
+
+        refreshed = await resolved_auth.refresh(
+            AuthContext(provider=provider, model=model, api_family=api_family, method=method, url=url)
+        )
+        if not refreshed:
+            return response
+
+        response.release()
+        return await self._perform_request(
+            method,
+            url,
+            context=AuthContext(provider=provider, model=model, api_family=api_family, method=method, url=url),
+            params=params,
+            headers=headers,
+            auth=resolved_auth,
+            json_body=json_body,
+            data=data,
+            timeout=timeout,
+        )
+
+    async def _perform_request(
+        self,
+        method: str,
+        url: str,
+        *,
+        context: AuthContext,
+        params: Mapping[str, str] | None,
+        headers: Mapping[str, str] | None,
+        auth: TransportAuth | None,
+        json_body: Any,
+        data: Any,
+        timeout: float | aiohttp.ClientTimeout | None,
+    ) -> aiohttp.ClientResponse:
+        resolved = await resolve_transport_auth(auth, context=context)
+        merged_params = dict(params or {})
+        merged_params.update({str(key): str(value) for key, value in resolved.params.items()})
+        merged_headers = self._merge_headers(headers)
+        merged_headers.update(resolved.headers)
+        return await self._session.request(
+            method,
+            self._resolve_url(url),
+            params=merged_params or None,
+            headers=merged_headers,
+            json=json_body,
+            data=data,
+            timeout=self._normalize_timeout(timeout),
+        )
 
     async def _raise_for_status(
         self,

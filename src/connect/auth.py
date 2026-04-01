@@ -1,11 +1,33 @@
 from __future__ import annotations
 
 import base64
+import inspect
 import json
-import os
 import typing
 
-from .types import AuthStrategy
+import pydantic
+
+
+class ResolvedAuth(pydantic.BaseModel):
+    headers: dict[str, str] = pydantic.Field(default_factory=dict)
+    params: dict[str, str] = pydantic.Field(default_factory=dict)
+
+
+class AuthContext(pydantic.BaseModel):
+    provider: str | None = None
+    model: str | None = None
+    api_family: str | None = None
+    method: str | None = None
+    url: str | None = None
+
+
+@typing.runtime_checkable
+class TransportAuth(typing.Protocol):
+    async def resolve(self, context: AuthContext | None = None) -> ResolvedAuth:
+        ...
+
+    async def refresh(self, context: AuthContext | None = None) -> bool:
+        ...
 
 
 class AccessToken:
@@ -15,8 +37,11 @@ class AccessToken:
 
 
 class NoAuth:
-    async def apply(self, request) -> None:
-        return None
+    async def resolve(self, context: AuthContext | None = None) -> ResolvedAuth:
+        return ResolvedAuth()
+
+    async def refresh(self, context: AuthContext | None = None) -> bool:
+        return False
 
 
 class HeaderAPIKeyAuth:
@@ -30,8 +55,11 @@ class HeaderAPIKeyAuth:
         self.header_name = header_name
         self.prefix = prefix
 
-    async def apply(self, request) -> None:
-        request.headers[self.header_name] = f"{self.prefix}{self.api_key}"
+    async def resolve(self, context: AuthContext | None = None) -> ResolvedAuth:
+        return ResolvedAuth(headers={self.header_name: f"{self.prefix}{self.api_key}"})
+
+    async def refresh(self, context: AuthContext | None = None) -> bool:
+        return False
 
 
 class BearerTokenAuth(HeaderAPIKeyAuth):
@@ -82,10 +110,11 @@ class ChatGPTAccessTokenAuth(BearerTokenAuth):
         super().__init__(token)
         self.account_id = account_id or extract_chatgpt_account_id(token)
 
-    async def apply(self, request) -> None:
-        await super().apply(request)
+    async def resolve(self, context: AuthContext | None = None) -> ResolvedAuth:
+        resolved = await super().resolve(context)
         if self.account_id:
-            request.headers["chatgpt-account-id"] = self.account_id
+            resolved.headers["chatgpt-account-id"] = self.account_id
+        return resolved
 
 
 class QueryAPIKeyAuth:
@@ -93,21 +122,25 @@ class QueryAPIKeyAuth:
         self.api_key = api_key
         self.param_name = param_name
 
-    async def apply(self, request) -> None:
-        params = dict(getattr(request, "params", {}) or {})
-        params[self.param_name] = self.api_key
-        request.params = params
+    async def resolve(self, context: AuthContext | None = None) -> ResolvedAuth:
+        return ResolvedAuth(params={self.param_name: self.api_key})
+
+    async def refresh(self, context: AuthContext | None = None) -> bool:
+        return False
 
 
 class CallableTokenAuth:
     def __init__(self, get_token: typing.Callable[[], typing.Awaitable[str] | str]) -> None:
         self.get_token = get_token
 
-    async def apply(self, request) -> None:
+    async def resolve(self, context: AuthContext | None = None) -> ResolvedAuth:
         token = self.get_token()
-        if typing.isawaitable(token):
+        if inspect.isawaitable(token):
             token = await token
-        request.headers["Authorization"] = f"Bearer {token}"
+        return ResolvedAuth(headers={"Authorization": f"Bearer {token}"})
+
+    async def refresh(self, context: AuthContext | None = None) -> bool:
+        return False
 
 
 class RefreshingOAuthAuth:
@@ -117,124 +150,40 @@ class RefreshingOAuthAuth:
     ) -> None:
         self.get_access_token = get_access_token
 
-    async def apply(self, request) -> None:
+    async def resolve(self, context: AuthContext | None = None) -> ResolvedAuth:
         token = self.get_access_token()
-        if typing.isawaitable(token):
+        if inspect.isawaitable(token):
             token = await token
-        request.headers["Authorization"] = f"{token.token_type} {token.token}"
+        return ResolvedAuth(headers={"Authorization": f"{token.token_type} {token.token}"})
+
+    async def refresh(self, context: AuthContext | None = None) -> bool:
+        return False
 
 
 class CompositeAuth:
-    def __init__(self, strategies: list[AuthStrategy]) -> None:
+    def __init__(self, strategies: list[TransportAuth]) -> None:
         self.strategies = strategies
 
-    async def apply(self, request) -> None:
+    async def resolve(self, context: AuthContext | None = None) -> ResolvedAuth:
+        resolved = ResolvedAuth()
         for strategy in self.strategies:
-            await strategy.apply(request)
+            current = await strategy.resolve(context)
+            resolved.headers.update(current.headers)
+            resolved.params.update(current.params)
+        return resolved
+
+    async def refresh(self, context: AuthContext | None = None) -> bool:
+        refreshed = False
+        for strategy in self.strategies:
+            refreshed = await strategy.refresh(context) or refreshed
+        return refreshed
 
 
-class AuthRegistry:
-    def __init__(self) -> None:
-        self._auth_by_provider: dict[str, AuthStrategy] = {}
-
-    def register(self, provider: str, auth: AuthStrategy) -> None:
-        self._auth_by_provider[provider] = auth
-
-    def get(self, provider: str) -> AuthStrategy | None:
-        return self._auth_by_provider.get(provider)
-
-
-class _MutableRequest:
-    def __init__(self, headers: dict[str, str], params: dict[str, str]) -> None:
-        self.headers = headers
-        self.params = params
-
-
-async def resolve_request_auth(
-    auth: AuthStrategy | None,
+async def resolve_transport_auth(
+    auth: TransportAuth | None,
     *,
-    headers: dict[str, str] | None = None,
-    params: dict[str, str] | None = None,
-) -> tuple[dict[str, str], dict[str, str]]:
-    resolved_headers = dict(headers or {})
-    resolved_params = dict(params or {})
+    context: AuthContext | None = None,
+) -> ResolvedAuth:
     if auth is None:
-        return resolved_headers, resolved_params
-
-    request = _MutableRequest(headers=resolved_headers, params=resolved_params)
-    await auth.apply(request)
-    return request.headers, request.params
-
-
-def openai_api_key_from_env(env: typing.Mapping[str, str] | None = None) -> BearerTokenAuth | None:
-    source = env or os.environ
-    token = source.get("OPENAI_API_KEY")
-    if not token:
-        return None
-    return BearerTokenAuth(token)
-
-
-def anthropic_api_key_from_env(env: typing.Mapping[str, str] | None = None) -> HeaderAPIKeyAuth | None:
-    source = env or os.environ
-    token = source.get("ANTHROPIC_API_KEY")
-    if not token:
-        return None
-    return HeaderAPIKeyAuth(api_key=token, header_name="x-api-key", prefix="")
-
-
-def gemini_api_key_from_env(env: typing.Mapping[str, str] | None = None) -> HeaderAPIKeyAuth | None:
-    source = env or os.environ
-    token = source.get("GEMINI_API_KEY") or source.get("GOOGLE_API_KEY")
-    if not token:
-        return None
-    return HeaderAPIKeyAuth(api_key=token, header_name="x-goog-api-key", prefix="")
-
-
-def openrouter_api_key_from_env(env: typing.Mapping[str, str] | None = None) -> BearerTokenAuth | None:
-    source = env or os.environ
-    token = source.get("OPENROUTER_API_KEY")
-    if not token:
-        return None
-    return BearerTokenAuth(token)
-
-
-def chatgpt_access_token_from_env(env: typing.Mapping[str, str] | None = None) -> ChatGPTAccessTokenAuth | None:
-    source = env or os.environ
-    token = source.get("CHATGPT_ACCESS_TOKEN")
-    if not token:
-        return None
-    return ChatGPTAccessTokenAuth(token, account_id=source.get("CHATGPT_ACCOUNT_ID"))
-
-
-def chatgpt_credentials_file_auth(env: typing.Mapping[str, str] | None = None) -> AuthStrategy | None:
-    source = env or os.environ
-    path = source.get("CHATGPT_CREDENTIALS_FILE")
-    if not path:
-        return None
-
-    from .credentials.base import CredentialManager, build_console_login_callbacks
-
-    manager = CredentialManager()
-    return manager.auth_from_file_or_login(
-        "chatgpt",
-        path,
-        login_callbacks_factory=lambda provider: build_console_login_callbacks(
-            provider=provider,
-            env=source,
-            manual_input_env_vars=("CHATGPT_OAUTH_REDIRECT_URL",),
-        ),
-    )
-
-
-def default_env_auth(provider: str) -> AuthStrategy | None:
-    factories: dict[str, typing.Callable[[], AuthStrategy | None]] = {
-        "chatgpt": lambda: chatgpt_credentials_file_auth() or chatgpt_access_token_from_env(),
-        "openai": openai_api_key_from_env,
-        "anthropic": anthropic_api_key_from_env,
-        "gemini": gemini_api_key_from_env,
-        "openrouter": openrouter_api_key_from_env,
-    }
-    factory = factories.get(provider)
-    if factory is None:
-        return None
-    return factory()
+        return ResolvedAuth()
+    return await auth.resolve(context)

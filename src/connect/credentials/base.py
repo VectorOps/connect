@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import inspect
 import json
 import pathlib
 import time
@@ -7,7 +9,7 @@ import typing
 
 import pydantic
 
-from ..types import AuthStrategy
+from ..auth import AuthContext, ResolvedAuth, TransportAuth
 
 
 class OAuthAuthInfo(pydantic.BaseModel):
@@ -30,17 +32,21 @@ class OAuthLoginCallbacks(pydantic.BaseModel):
     on_manual_code_input: typing.Callable[[], typing.Awaitable[str]] | None = None
 
 
-class OAuthCredentials(pydantic.BaseModel):
+class OAuth2Credentials(pydantic.BaseModel):
     provider: str
     access_token: str
-    refresh_token: str
-    expires_at: float
+    refresh_token: str | None = None
+    expires_at: float | None = None
     token_type: str = "Bearer"
-    account_id: str | None = None
     metadata: dict[str, typing.Any] = pydantic.Field(default_factory=dict)
 
     def is_expired(self, *, skew_seconds: float = 30.0) -> bool:
+        if self.expires_at is None:
+            return False
         return time.time() >= (self.expires_at - skew_seconds)
+
+
+OAuthCredentials = OAuth2Credentials
 
 
 class StoredCredentialsDocument(pydantic.BaseModel):
@@ -50,15 +56,15 @@ class StoredCredentialsDocument(pydantic.BaseModel):
 
 class CredentialProvider(typing.Protocol):
     provider_name: str
-    credentials_type: type[OAuthCredentials]
+    credentials_type: type[OAuth2Credentials]
 
-    async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
+    async def login(self, callbacks: OAuthLoginCallbacks) -> OAuth2Credentials:
         ...
 
-    async def refresh(self, credentials: OAuthCredentials) -> OAuthCredentials:
+    async def refresh(self, credentials: OAuth2Credentials) -> OAuth2Credentials:
         ...
 
-    def to_auth(self, credentials: OAuthCredentials) -> AuthStrategy:
+    def build_resolved_auth(self, credentials: OAuth2Credentials) -> ResolvedAuth:
         ...
 
 
@@ -113,8 +119,50 @@ class CredentialStore:
         provider_adapter = registry.get(provider)
         return provider_adapter.credentials_type.model_validate(payload)
 
+    def delete(self, path: str | pathlib.Path, *, provider: str) -> None:
+        document = self.load_document(path)
+        if provider not in document.credentials:
+            return
+        del document.credentials[provider]
+        self.save_document(path, document)
 
-class PersistedCredentialAuth:
+
+PersistCallback = typing.Callable[[OAuth2Credentials], typing.Awaitable[None] | None]
+
+
+class OAuth2RefreshableAuth:
+    def __init__(
+        self,
+        *,
+        provider: CredentialProvider,
+        credentials: OAuth2Credentials,
+        persist_callback: PersistCallback | None = None,
+    ) -> None:
+        self._provider = provider
+        self._credentials = credentials
+        self._persist_callback = persist_callback
+
+    async def resolve(self, context: AuthContext | None = None) -> ResolvedAuth:
+        if self._credentials.is_expired() and self._credentials.refresh_token:
+            await self._refresh_credentials()
+        return self._provider.build_resolved_auth(self._credentials)
+
+    async def refresh(self, context: AuthContext | None = None) -> bool:
+        if not self._credentials.refresh_token:
+            return False
+        await self._refresh_credentials()
+        return True
+
+    async def _refresh_credentials(self) -> None:
+        self._credentials = await self._provider.refresh(self._credentials)
+        if self._persist_callback is None:
+            return
+        result = self._persist_callback(self._credentials)
+        if inspect.isawaitable(result):
+            await result
+
+
+class PersistedCredentialAuth(TransportAuth):
     def __init__(
         self,
         *,
@@ -129,8 +177,20 @@ class PersistedCredentialAuth:
         self._path = pathlib.Path(path)
         self._login_callbacks_factory = login_callbacks_factory
         self._auto_login_if_missing = auto_login_if_missing
+        self._auth: OAuth2RefreshableAuth | None = None
 
-    async def apply(self, request) -> None:
+    async def resolve(self, context: AuthContext | None = None) -> ResolvedAuth:
+        auth = await self._ensure_auth()
+        return await auth.resolve(context)
+
+    async def refresh(self, context: AuthContext | None = None) -> bool:
+        auth = await self._ensure_auth()
+        return await auth.refresh(context)
+
+    async def _ensure_auth(self) -> OAuth2RefreshableAuth:
+        if self._auth is not None:
+            return self._auth
+
         registry = CredentialRegistry()
         registry.register(self._provider)
         try:
@@ -141,12 +201,12 @@ class PersistedCredentialAuth:
             credentials = await self._provider.login(self._login_callbacks_factory(self._provider.provider_name))
             self._store.save(self._path, credentials)
 
-        if credentials.is_expired():
-            credentials = await self._provider.refresh(credentials)
-            self._store.save(self._path, credentials)
-
-        auth = self._provider.to_auth(credentials)
-        await auth.apply(request)
+        self._auth = OAuth2RefreshableAuth(
+            provider=self._provider,
+            credentials=credentials,
+            persist_callback=lambda updated: self._store.save(self._path, updated),
+        )
+        return self._auth
 
 
 class CredentialManager:
@@ -165,7 +225,7 @@ class CredentialManager:
         callbacks: OAuthLoginCallbacks,
         *,
         persist_path: str | pathlib.Path | None = None,
-    ) -> OAuthCredentials:
+    ) -> OAuth2Credentials:
         adapter = self.registry.get(provider)
         credentials = await adapter.login(callbacks)
         if persist_path is not None:
@@ -178,7 +238,7 @@ class CredentialManager:
         credentials: OAuthCredentials,
         *,
         persist_path: str | pathlib.Path | None = None,
-    ) -> OAuthCredentials:
+    ) -> OAuth2Credentials:
         adapter = self.registry.get(provider)
         refreshed = await adapter.refresh(credentials)
         if persist_path is not None:

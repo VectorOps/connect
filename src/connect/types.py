@@ -9,14 +9,10 @@ import typing
 import aiohttp
 import pydantic
 
+from .auth import TransportAuth
+
 
 TOOL_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,63}$")
-
-
-@typing.runtime_checkable
-class AuthStrategy(typing.Protocol):
-    async def apply(self, request: aiohttp.client_reqrep.ClientRequest) -> None:
-        ...
 
 
 class MetadataModel(pydantic.BaseModel):
@@ -342,7 +338,7 @@ class RequestOptions(pydantic.BaseModel):
 
     timeout: float | aiohttp.ClientTimeout | None = 60.0
     headers: dict[str, str] = pydantic.Field(default_factory=dict)
-    auth: AuthStrategy | None = None
+    auth: TransportAuth | None = None
     idempotency_key: str | None = None
     provider_options: dict[str, typing.Any] = pydantic.Field(default_factory=dict)
     transport_options: dict[str, typing.Any] = pydantic.Field(default_factory=dict)
