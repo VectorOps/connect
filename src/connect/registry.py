@@ -128,9 +128,10 @@ def list_models(provider: str | None = None) -> list[ModelSpec]:
 
 
 def build_default_provider_registry() -> ProviderRegistry:
-    from .providers import ChatGPTProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider
+    from .providers import AnthropicProvider, ChatGPTProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider
 
     registry = ProviderRegistry()
+    registry.register("anthropic", AnthropicProvider())
     registry.register("chatgpt", ChatGPTProvider())
     registry.register("gemini", GeminiProvider())
     registry.register("openai", OpenAIProvider())

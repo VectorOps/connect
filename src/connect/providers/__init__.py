@@ -1,3 +1,4 @@
+from .anthropic import AnthropicProvider
 from .base import BaseProviderAdapter, ProviderAdapter
 from .chatgpt import ChatGPTProvider
 from .gemini import GeminiProvider
