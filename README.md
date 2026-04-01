@@ -106,8 +106,7 @@ asyncio.run(main())
 Core concepts
 -------------
 
-Unified request model
-~~~~~~~~~~~~~~~~~~~~~
+### Unified request model
 
 Requests are provider-agnostic and use typed message/content models. A request can include:
 
@@ -117,8 +116,7 @@ Requests are provider-agnostic and use typed message/content models. A request c
 - image inputs in user messages and tool results
 - structured response format hints
 
-Unified response model
-~~~~~~~~~~~~~~~~~~~~~~
+### Unified response model
 
 Responses normalize provider output into:
 
@@ -128,8 +126,7 @@ Responses normalize provider output into:
 - response and request identifiers when available
 - provider-specific replay metadata for same-provider continuation
 
-Streaming-first design
-~~~~~~~~~~~~~~~~~~~~~~
+### Streaming-first design
 
 Streaming is the canonical execution path. `generate()` internally consumes `stream()` and returns the final assembled `AssistantResponse`.
 
@@ -138,8 +135,7 @@ Authentication management
 
 Authentication is explicit, request-scoped, and independent from provider adapters.
 
-Token-based auth
-~~~~~~~~~~~~~~~~
+### Token-based auth
 
 The simplest pattern is to resolve credentials from environment variables:
 
@@ -195,8 +191,7 @@ async with AsyncLLMClient() as client:
     )
 ```
 
-Interactive and persisted OAuth flows
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+### Interactive and persisted OAuth flows
 
 The repository includes credential-management helpers for OAuth-backed providers. Today, the interactive login path is implemented for ChatGPT credential management.
 
