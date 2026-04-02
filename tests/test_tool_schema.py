@@ -121,6 +121,35 @@ def test_tool_spec_validates_and_stores_normalized_canonical_schema() -> None:
     }
 
 
+def test_tool_spec_external_schema_preserves_original_document() -> None:
+    spec = ToolSpec.external(
+        name="lookup_status",
+        description="Lookup a status string.",
+        input_schema={
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$defs": {
+                "input": {
+                    "type": "object",
+                    "properties": {"id": {"type": "string"}},
+                }
+            },
+            "$ref": "#/$defs/input",
+        },
+    )
+
+    assert spec.schema_mode == "external"
+    assert spec.input_schema == {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$defs": {
+            "input": {
+                "type": "object",
+                "properties": {"id": {"type": "string"}},
+            }
+        },
+        "$ref": "#/$defs/input",
+    }
+
+
 def test_tool_spec_rejects_invalid_canonical_schema() -> None:
     with pytest.raises(ValidationError, match="object root schema"):
         ToolSpec(

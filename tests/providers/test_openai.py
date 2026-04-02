@@ -269,6 +269,45 @@ def test_openai_build_payload_preserves_optional_properties_when_tool_is_non_str
     }
 
 
+def test_openai_build_payload_preserves_external_tool_schema_and_disables_strict() -> None:
+    provider = OpenAIProvider()
+    model = _openai_model()
+    request = GenerateRequest(
+        messages=[UserMessage(content="Hello")],
+        tools=[
+            ToolSpec.external(
+                name="lookup",
+                description="Lookup data",
+                strict=True,
+                input_schema={
+                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                    "$defs": {
+                        "input": {
+                            "type": "object",
+                            "properties": {"query": {"type": "string"}},
+                        }
+                    },
+                    "$ref": "#/$defs/input",
+                },
+            )
+        ],
+    )
+
+    payload = provider.build_payload(model, request, RequestOptions())
+
+    assert payload["tools"][0]["strict"] is False
+    assert payload["tools"][0]["parameters"] == {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$defs": {
+            "input": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+            }
+        },
+        "$ref": "#/$defs/input",
+    }
+
+
 def test_openai_build_payload_supports_empty_tool_result_output() -> None:
     provider = OpenAIProvider()
     model = _openai_model()

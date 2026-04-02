@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import base64
 import binascii
 import decimal
@@ -187,7 +188,9 @@ class ToolSpec(pydantic.BaseModel):
     name: str
     description: str
     input_schema: dict[str, typing.Any]
+    schema_mode: typing.Literal["canonical", "external"] = "canonical"
     strict: bool | None = True
+    _original_input_schema: dict[str, typing.Any] | None = pydantic.PrivateAttr(default=None)
 
     @pydantic.field_validator("name")
     @classmethod
@@ -205,15 +208,43 @@ class ToolSpec(pydantic.BaseModel):
             raise ValueError("Tool descriptions must not be empty")
         return description
 
-    @pydantic.field_validator("input_schema")
+    @pydantic.field_validator("schema_mode")
     @classmethod
-    def validate_input_schema(cls, value: dict[str, typing.Any]) -> dict[str, typing.Any]:
+    def validate_schema_mode(cls, value: str) -> str:
+        if value not in {"canonical", "external"}:
+            raise ValueError("ToolSpec.schema_mode must be 'canonical' or 'external'")
+        return value
+
+    @pydantic.model_validator(mode="after")
+    def validate_input_schema(self) -> ToolSpec:
+        value = self.input_schema
         if not isinstance(value, dict) or not value:
             raise ValueError("Tool specs must include a non-empty input_schema")
+        self._original_input_schema = copy.deepcopy(value)
+        if self.schema_mode == "external":
+            return self
         try:
-            return normalize_canonical_tool_schema(value)
+            self.input_schema = normalize_canonical_tool_schema(value)
         except ToolSchemaError as exc:
             raise ValueError(str(exc)) from exc
+        return self
+
+    @classmethod
+    def external(
+        cls,
+        *,
+        name: str,
+        description: str,
+        input_schema: dict[str, typing.Any],
+        strict: bool | None = True,
+    ) -> ToolSpec:
+        return cls(
+            name=name,
+            description=description,
+            input_schema=input_schema,
+            schema_mode="external",
+            strict=strict,
+        )
 
 
 class SpecificToolChoice(pydantic.BaseModel):

@@ -298,3 +298,4 @@ async def test_stream_handle_invokes_close_callback_on_terminal_event() -> None:
 
     assert response.response_id == "resp_test"
     assert closed == ["done"]
+

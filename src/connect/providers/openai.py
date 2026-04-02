@@ -148,10 +148,9 @@ class OpenAIProvider(BaseProviderAdapter):
                     "name": tool.name,
                     "description": tool.description,
                     "parameters": self._convert_tool_schema(
-                        tool.input_schema,
-                        strict=True if tool.strict is None else tool.strict,
+                        tool,
                     ),
-                    "strict": True if tool.strict is None else tool.strict,
+                    "strict": self._tool_strict(tool),
                 }
                 for tool in request.tools
             ]
@@ -403,10 +402,24 @@ class OpenAIProvider(BaseProviderAdapter):
             }
         raise TypeError(f"Unsupported assistant block type: {block.type!r}")
 
-    def _convert_tool_schema(self, schema: dict[str, Any], *, strict: bool) -> dict[str, Any]:
+    def _convert_tool_schema(self, tool) -> dict[str, Any]:
+        schema = self._tool_input_schema(tool)
+        strict = self._tool_strict(tool)
         if not strict:
             return copy.deepcopy(schema)
         return self._force_strict_object_schema(schema)
+
+    def _tool_input_schema(self, tool) -> dict[str, Any]:
+        if getattr(tool, "schema_mode", "canonical") == "external":
+            original_schema = getattr(tool, "_original_input_schema", None)
+            if isinstance(original_schema, dict) and original_schema:
+                return copy.deepcopy(original_schema)
+        return copy.deepcopy(tool.input_schema)
+
+    def _tool_strict(self, tool) -> bool:
+        if getattr(tool, "schema_mode", "canonical") == "external":
+            return False
+        return True if tool.strict is None else tool.strict
 
     def _force_strict_object_schema(self, schema: Any) -> Any:
         if isinstance(schema, list):
