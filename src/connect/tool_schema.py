@@ -18,6 +18,20 @@ def normalize_canonical_tool_schema(schema: dict[str, typing.Any]) -> dict[str, 
     return normalized
 
 
+def _normalize_schema_mapping(
+    value: typing.Any,
+    *,
+    path: str,
+) -> dict[str, typing.Any]:
+    if not isinstance(value, dict):
+        raise ToolSchemaError(f"{path} must be an object")
+
+    return {
+        str(name): _normalize_tool_schema_node(item, path=f"{path}.{name}")
+        for name, item in value.items()
+    }
+
+
 def _normalize_tool_schema_node(node: typing.Any, *, path: str) -> typing.Any:
     if isinstance(node, list):
         return [
@@ -31,25 +45,30 @@ def _normalize_tool_schema_node(node: typing.Any, *, path: str) -> typing.Any:
     normalized: dict[str, typing.Any] = {}
     for key, value in node.items():
         if key == "properties":
-            if not isinstance(value, dict):
-                raise ToolSchemaError(f"{path}.properties must be an object")
-            normalized[key] = {
-                str(property_name): _normalize_tool_schema_node(
-                    property_schema,
-                    path=f"{path}.properties.{property_name}",
-                )
-                for property_name, property_schema in value.items()
-            }
+            normalized[key] = _normalize_schema_mapping(value, path=f"{path}.properties")
             continue
 
-        if key == "items":
+        if key in {"$defs", "definitions", "patternProperties", "dependentSchemas"}:
+            normalized[key] = _normalize_schema_mapping(value, path=f"{path}.{key}")
+            continue
+
+        if key in {"items", "additionalItems", "unevaluatedItems"}:
             if isinstance(value, list):
                 normalized[key] = [
                     _normalize_tool_schema_node(item_schema, path=f"{path}.items[{index}]")
                     for index, item_schema in enumerate(value)
                 ]
             else:
-                normalized[key] = _normalize_tool_schema_node(value, path=f"{path}.items")
+                normalized[key] = _normalize_tool_schema_node(value, path=f"{path}.{key}")
+            continue
+
+        if key == "prefixItems":
+            if not isinstance(value, list):
+                raise ToolSchemaError(f"{path}.prefixItems must be an array")
+            normalized[key] = [
+                _normalize_tool_schema_node(item, path=f"{path}.prefixItems[{index}]")
+                for index, item in enumerate(value)
+            ]
             continue
 
         if key in {"anyOf", "oneOf", "allOf"}:
@@ -61,7 +80,29 @@ def _normalize_tool_schema_node(node: typing.Any, *, path: str) -> typing.Any:
             ]
             continue
 
-        if key in {"additionalProperties", "not", "if", "then", "else", "contains", "propertyNames"}:
+        if key == "dependencies":
+            if not isinstance(value, dict):
+                raise ToolSchemaError(f"{path}.dependencies must be an object")
+            normalized[key] = {
+                str(name): (
+                    _normalize_tool_schema_node(item, path=f"{path}.dependencies.{name}")
+                    if isinstance(item, dict)
+                    else item
+                )
+                for name, item in value.items()
+            }
+            continue
+
+        if key in {
+            "additionalProperties",
+            "unevaluatedProperties",
+            "not",
+            "if",
+            "then",
+            "else",
+            "contains",
+            "propertyNames",
+        }:
             if isinstance(value, dict):
                 normalized[key] = _normalize_tool_schema_node(value, path=f"{path}.{key}")
             else:
@@ -73,8 +114,13 @@ def _normalize_tool_schema_node(node: typing.Any, *, path: str) -> typing.Any:
     is_object_schema = (
         normalized.get("type") == "object"
         or "properties" in normalized
+        or "patternProperties" in normalized
         or "required" in normalized
         or "additionalProperties" in normalized
+        or "unevaluatedProperties" in normalized
+        or "propertyNames" in normalized
+        or "dependentSchemas" in normalized
+        or "dependencies" in normalized
     )
     if not is_object_schema:
         return normalized

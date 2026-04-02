@@ -79,12 +79,109 @@ def test_normalize_canonical_tool_schema_recursively_normalizes_nested_objects()
     }
 
 
+def test_normalize_canonical_tool_schema_supports_common_json_schema_constructs() -> None:
+    schema = normalize_canonical_tool_schema(
+        {
+            "type": "object",
+            "$defs": {
+                "filter": {
+                    "type": "object",
+                    "patternProperties": {
+                        "^tag:": {
+                            "type": "object",
+                            "properties": {
+                                "value": {"type": "string"},
+                            },
+                        }
+                    },
+                }
+            },
+            "properties": {
+                "filters": {"$ref": "#/$defs/filter"},
+                "tuple": {
+                    "type": "array",
+                    "prefixItems": [
+                        {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string"},
+                            },
+                        },
+                        {"type": "string"},
+                    ],
+                },
+            },
+            "dependentSchemas": {
+                "filters": {
+                    "properties": {
+                        "mode": {"type": "string"},
+                    },
+                }
+            },
+        }
+    )
+
+    assert schema == {
+        "type": "object",
+        "$defs": {
+            "filter": {
+                "type": "object",
+                "patternProperties": {
+                    "^tag:": {
+                        "type": "object",
+                        "properties": {
+                            "value": {"type": "string"},
+                        },
+                        "required": [],
+                        "additionalProperties": False,
+                    }
+                },
+                "properties": {},
+                "required": [],
+                "additionalProperties": False,
+            }
+        },
+        "properties": {
+            "filters": {"$ref": "#/$defs/filter"},
+            "tuple": {
+                "type": "array",
+                "prefixItems": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                        },
+                        "required": [],
+                        "additionalProperties": False,
+                    },
+                    {"type": "string"},
+                ],
+            },
+        },
+        "dependentSchemas": {
+            "filters": {
+                "type": "object",
+                "properties": {
+                    "mode": {"type": "string"},
+                },
+                "required": [],
+                "additionalProperties": False,
+            }
+        },
+        "required": [],
+        "additionalProperties": False,
+    }
+
+
 @pytest.mark.parametrize(
     ("schema", "message"),
     [
         ({"type": "string"}, "object root schema"),
         ({"type": "object", "properties": []}, "properties must be an object"),
         ({"type": "object", "properties": {"id": {"type": "string"}}, "required": "id"}, "required must be an array"),
+        ({"type": "object", "$defs": []}, r"\$defs must be an object"),
+        ({"type": "object", "prefixItems": {}}, "prefixItems must be an array"),
+        ({"type": "object", "dependentSchemas": []}, "dependentSchemas must be an object"),
         (
             {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["missing"]},
             "required references unknown property 'missing'",

@@ -13,6 +13,9 @@ Each tool declares:
 - `description`
 - `input_schema`
 
+By default, `ToolSpec` treats `input_schema` as canonical and normalizes it.
+This is `schema_mode="canonical"`.
+
 The canonical `input_schema` must be a JSON Schema object-root schema.
 
 Example:
@@ -40,10 +43,38 @@ Rules:
 - `required` must be an array of declared property names
 - `required` defaults to `[]`
 - `additionalProperties` defaults to `false`
-- nested schemas in `properties`, `items`, `anyOf`, `oneOf`, `allOf`, and
-  related schema-bearing fields are normalized recursively
+- nested schemas are normalized recursively through common schema-bearing
+  keywords including:
+  - `properties`
+  - `items`, `prefixItems`, `additionalItems`, `unevaluatedItems`
+  - `anyOf`, `oneOf`, `allOf`, `not`, `if`, `then`, `else`, `contains`
+  - `additionalProperties`, `unevaluatedProperties`, `propertyNames`
+  - `$defs`, `definitions`, `patternProperties`, `dependentSchemas`
+  - schema-valued entries inside `dependencies`
 
 This gives the project one internal format independent of provider syntax.
+
+The canonical validator is intentionally practical rather than a full JSON
+Schema implementation. It preserves unsupported keywords as-is when they do not
+require canonical object normalization, while normalizing the nested schemas it
+does understand.
+
+## External schema mode
+
+`ToolSpec` also supports `schema_mode="external"` for cases where the caller
+needs to preserve an original provider-oriented or draft-specific JSON Schema
+document.
+
+In external mode:
+
+- the schema is stored as provided
+- canonical normalization is skipped
+- object-root canonical restrictions are not applied
+- advanced constructs such as `$schema`, top-level `$ref`, and arbitrary draft
+  features are preserved verbatim
+
+Use external mode when you already have a complete JSON Schema document and do
+not want this project to rewrite it into the internal canonical form.
 
 ## Why this is needed
 
