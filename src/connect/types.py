@@ -10,6 +10,7 @@ import aiohttp
 import pydantic
 
 from .auth import TransportAuth
+from .tool_schema import ToolSchemaError, normalize_canonical_tool_schema
 
 
 TOOL_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,63}$")
@@ -209,7 +210,10 @@ class ToolSpec(pydantic.BaseModel):
     def validate_input_schema(cls, value: dict[str, typing.Any]) -> dict[str, typing.Any]:
         if not isinstance(value, dict) or not value:
             raise ValueError("Tool specs must include a non-empty input_schema")
-        return value
+        try:
+            return normalize_canonical_tool_schema(value)
+        except ToolSchemaError as exc:
+            raise ValueError(str(exc)) from exc
 
 
 class SpecificToolChoice(pydantic.BaseModel):

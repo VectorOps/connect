@@ -1,0 +1,130 @@
+from __future__ import annotations
+
+import pytest
+from pydantic import ValidationError
+
+from connect.tool_schema import ToolSchemaError, normalize_canonical_tool_schema
+from connect.types import ToolSpec
+
+
+def test_normalize_canonical_tool_schema_defaults_required_and_additional_properties() -> None:
+    schema = normalize_canonical_tool_schema(
+        {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+            },
+        }
+    )
+
+    assert schema == {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string"},
+        },
+        "required": [],
+        "additionalProperties": False,
+    }
+
+
+def test_normalize_canonical_tool_schema_recursively_normalizes_nested_objects() -> None:
+    schema = normalize_canonical_tool_schema(
+        {
+            "type": "object",
+            "properties": {
+                "filters": {
+                    "type": "object",
+                    "properties": {
+                        "status": {"type": "string"},
+                    },
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                        },
+                    },
+                },
+            },
+        }
+    )
+
+    assert schema == {
+        "type": "object",
+        "properties": {
+            "filters": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string"},
+                },
+                "required": [],
+                "additionalProperties": False,
+            },
+            "items": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                    },
+                    "required": [],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": [],
+        "additionalProperties": False,
+    }
+
+
+@pytest.mark.parametrize(
+    ("schema", "message"),
+    [
+        ({"type": "string"}, "object root schema"),
+        ({"type": "object", "properties": []}, "properties must be an object"),
+        ({"type": "object", "properties": {"id": {"type": "string"}}, "required": "id"}, "required must be an array"),
+        (
+            {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["missing"]},
+            "required references unknown property 'missing'",
+        ),
+    ],
+)
+def test_normalize_canonical_tool_schema_rejects_invalid_schemas(
+    schema: dict,
+    message: str,
+) -> None:
+    with pytest.raises(ToolSchemaError, match=message):
+        normalize_canonical_tool_schema(schema)
+
+
+def test_tool_spec_validates_and_stores_normalized_canonical_schema() -> None:
+    spec = ToolSpec(
+        name="lookup_status",
+        description="Lookup a status string.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "id": {"type": "string"},
+            },
+        },
+    )
+
+    assert spec.input_schema == {
+        "type": "object",
+        "properties": {
+            "id": {"type": "string"},
+        },
+        "required": [],
+        "additionalProperties": False,
+    }
+
+
+def test_tool_spec_rejects_invalid_canonical_schema() -> None:
+    with pytest.raises(ValidationError, match="object root schema"):
+        ToolSpec(
+            name="lookup_status",
+            description="Lookup a status string.",
+            input_schema={"type": "string"},
+        )

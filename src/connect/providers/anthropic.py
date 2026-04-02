@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from ..exceptions import ConnectError, ProviderProtocolError, make_error_info
+from ..transport.http import HttpStatusError
 from ..transport.assembly import ResponseAssembler
 from ..transport.sse import iter_sse_response
 from ..types import (
@@ -142,7 +143,7 @@ class AnthropicProvider(BaseProviderAdapter):
                 {
                     "name": tool.name,
                     "description": tool.description,
-                    "input_schema": tool.input_schema,
+                    "input_schema": self._convert_tool_schema(tool.input_schema),
                 }
                 for tool in request.tools
             ]
@@ -197,6 +198,9 @@ class AnthropicProvider(BaseProviderAdapter):
                 timeout=options.timeout,
                 expected_status=200,
             )
+        except HttpStatusError as exc:
+            yield assembler.error(self.build_http_error(exc.response))
+            return
         except ConnectError as exc:
             yield assembler.error(exc.error)
             return
@@ -520,6 +524,9 @@ class AnthropicProvider(BaseProviderAdapter):
         if tool_choice == "required":
             return {"type": "any"}
         return None
+
+    def _convert_tool_schema(self, schema: dict[str, Any]) -> dict[str, Any]:
+        return json.loads(json.dumps(schema))
 
     def _build_thinking_payload(
         self,

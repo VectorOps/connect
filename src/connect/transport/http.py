@@ -34,6 +34,12 @@ class HttpResponse:
         return json.loads(self.content.decode("utf-8"))
 
 
+class HttpStatusError(Exception):
+    def __init__(self, response: HttpResponse):
+        self.response = response
+        super().__init__(f"HTTP {response.status_code}")
+
+
 class HttpStreamResponse:
     def __init__(self, response: aiohttp.ClientResponse):
         self._response = response
@@ -147,8 +153,6 @@ class HttpTransport:
             async with response:
                 await self._raise_for_status(
                     response,
-                    provider=provider,
-                    api_family=api_family,
                     expected_status=expected_status,
                 )
                 content = await response.read()
@@ -195,8 +199,6 @@ class HttpTransport:
             try:
                 await self._raise_for_status(
                     response,
-                    provider=provider,
-                    api_family=api_family,
                     expected_status=expected_status,
                 )
             except Exception:
@@ -288,8 +290,6 @@ class HttpTransport:
         self,
         response: aiohttp.ClientResponse,
         *,
-        provider: str | None,
-        api_family: str | None,
         expected_status: int | set[int] | None,
     ) -> None:
         if expected_status is None:
@@ -302,25 +302,15 @@ class HttpTransport:
         if response.status in allowed_statuses:
             return
 
-        try:
-            body = await response.json(content_type=None)
-            message = self._extract_error_message(body)
-            raw = body if isinstance(body, dict) else {"body": body}
-        except Exception:
-            body_text = await response.text()
-            message = body_text or f"HTTP {response.status}"
-            raw = {"body": body_text} if body_text else None
-
-        error = make_error_info(
-            code=self._status_code_to_code(response.status),
-            message=message,
-            provider=provider,
-            api_family=api_family,
-            status_code=response.status,
-            retryable=response.status in {408, 429} or response.status >= 500,
-            raw=raw,
+        content = await response.read()
+        raise HttpStatusError(
+            HttpResponse(
+                status_code=response.status,
+                headers=response.headers,
+                content=content,
+                url=str(response.url),
+            )
         )
-        raise exception_from_error_info(error)
 
     def _resolve_url(self, url: str) -> str:
         if self._base_url is None or urlsplit(url).scheme:
@@ -348,6 +338,9 @@ class HttpTransport:
         provider: str | None,
         api_family: str | None,
     ):
+        if isinstance(exc, HttpStatusError):
+            return exc
+
         if hasattr(exc, "error"):
             return exc
 
@@ -400,28 +393,3 @@ class HttpTransport:
                 retryable=False,
             )
         )
-
-    def _extract_error_message(self, payload: Any) -> str:
-        if isinstance(payload, dict):
-            if isinstance(payload.get("error"), dict):
-                error = payload["error"]
-                if isinstance(error.get("message"), str):
-                    return error["message"]
-                if isinstance(error.get("error"), dict):
-                    nested_error = error["error"]
-                    if isinstance(nested_error.get("message"), str):
-                        return nested_error["message"]
-            if isinstance(payload.get("message"), str):
-                return payload["message"]
-            if isinstance(payload.get("detail"), str):
-                return payload["detail"]
-        return "Unexpected provider error"
-
-    def _status_code_to_code(self, status_code: int) -> str:
-        if status_code in {401, 403}:
-            return "authentication_error"
-        if status_code in {408, 429}:
-            return "rate_limit"
-        if status_code >= 500:
-            return "server_error"
-        return f"http_{status_code}"

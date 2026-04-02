@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import base64
 import binascii
 import json
@@ -7,6 +8,7 @@ from collections.abc import AsyncIterator, Mapping
 from typing import Any
 
 from ..exceptions import ConnectError, ProviderProtocolError, make_error_info
+from ..transport.http import HttpStatusError
 from ..transport.assembly import ResponseAssembler
 from ..transport.json_stream import iter_json_values
 from ..types import (
@@ -101,6 +103,68 @@ class GeminiProvider(BaseProviderAdapter):
             headers.update({str(key): str(value) for key, value in default_headers.items()})
         return headers
 
+    def build_error(
+        self,
+        payload: Any,
+        *,
+        status_code: int | None = None,
+        retryable: bool = False,
+    ) -> Any:
+        raw = payload if isinstance(payload, dict) else None
+        if isinstance(payload, dict) and isinstance(payload.get("error"), dict):
+            payload = payload["error"]
+
+        details: list[dict[str, Any]] = []
+        if isinstance(payload, dict) and isinstance(payload.get("details"), list):
+            details = [item for item in payload["details"] if isinstance(item, dict)]
+
+        code = "provider_error"
+        message = "Provider request failed"
+        if isinstance(payload, dict):
+            google_status = payload.get("status")
+            google_reason = None
+            for detail in details:
+                detail_type = str(detail.get("@type") or "")
+                if detail_type.endswith("google.rpc.ErrorInfo") and isinstance(detail.get("reason"), str):
+                    google_reason = detail["reason"]
+                    break
+
+            status_value = str(google_status).lower() if isinstance(google_status, str) and google_status else None
+            reason_value = str(google_reason).lower() if isinstance(google_reason, str) and google_reason else None
+
+            if reason_value in {"api_key_invalid", "invalid_api_key"} or status_value in {
+                "unauthenticated",
+                "permission_denied",
+            }:
+                code = "authentication_error"
+            elif status_value == "resource_exhausted":
+                code = "rate_limit"
+                retryable = True
+            elif status_value in {"unavailable", "deadline_exceeded"}:
+                code = status_value
+                retryable = True
+            else:
+                code = status_value or reason_value or str(payload.get("code") or code).lower()
+
+            if isinstance(payload.get("message"), str) and payload.get("message"):
+                message = str(payload["message"])
+            else:
+                for detail in details:
+                    detail_message = detail.get("message")
+                    if isinstance(detail_message, str) and detail_message:
+                        message = detail_message
+                        break
+
+        return make_error_info(
+            code=code,
+            message=message,
+            provider=self.provider_name,
+            api_family=self.api_family,
+            status_code=status_code,
+            retryable=retryable,
+            raw=raw,
+        )
+
     def build_payload(
         self,
         model: ModelSpec,
@@ -139,7 +203,7 @@ class GeminiProvider(BaseProviderAdapter):
                         {
                             "name": tool.name,
                             "description": tool.description,
-                            "parametersJsonSchema": tool.input_schema,
+                            "parametersJsonSchema": self._convert_tool_schema(tool.input_schema),
                         }
                         for tool in request.tools
                     ]
@@ -197,6 +261,9 @@ class GeminiProvider(BaseProviderAdapter):
                 timeout=options.timeout,
                 expected_status=200,
             )
+        except HttpStatusError as exc:
+            yield assembler.error(self.build_http_error(exc.response))
+            return
         except ConnectError as exc:
             yield assembler.error(exc.error)
             return
@@ -389,6 +456,9 @@ class GeminiProvider(BaseProviderAdapter):
             "required": "ANY",
         }
         return {"functionCallingConfig": {"mode": mapping.get(tool_choice, "AUTO")}}
+
+    def _convert_tool_schema(self, schema: dict[str, Any]) -> dict[str, Any]:
+        return copy.deepcopy(schema)
 
     def _build_thinking_config(self, model: ModelSpec, request: GenerateRequest) -> dict[str, Any] | None:
         reasoning = request.reasoning

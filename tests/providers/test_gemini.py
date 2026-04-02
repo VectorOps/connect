@@ -4,7 +4,9 @@ import json
 
 import pytest
 
+from connect.exceptions import AuthenticationError, exception_from_error_info
 from connect.providers import GeminiProvider
+from connect.transport.http import HttpResponse, HttpStatusError
 from connect.types import (
     AssistantMessage,
     GenerateRequest,
@@ -63,6 +65,14 @@ class _FakeHttpTransport:
     async def stream(self, method: str, url: str, **kwargs):
         self.calls.append({"method": method, "url": url, **kwargs})
         return self.response
+
+
+class _ErrorHttpTransport:
+    def __init__(self, response: HttpResponse) -> None:
+        self.response = response
+
+    async def stream(self, method: str, url: str, **kwargs):
+        raise HttpStatusError(self.response)
 
 
 def _gemini_model(**updates) -> ModelSpec:
@@ -164,6 +174,12 @@ def test_gemini_build_payload_serializes_multimodal_history_tools_and_reasoning(
     assert payload["contents"][2]["parts"][0]["functionResponse"]["response"] == {"output": "Found a red circle."}
     assert payload["contents"][2]["parts"][0]["functionResponse"]["parts"][0]["inlineData"]["mimeType"] == "image/png"
     assert payload["tools"][0]["functionDeclarations"][0]["name"] == "inspect_image"
+    assert payload["tools"][0]["functionDeclarations"][0]["parametersJsonSchema"] == {
+        "type": "object",
+        "properties": {"detail": {"type": "string"}},
+        "required": [],
+        "additionalProperties": False,
+    }
     assert payload["toolConfig"] == {
         "functionCallingConfig": {"mode": "ANY", "allowedFunctionNames": ["inspect_image"]}
     }
@@ -517,3 +533,66 @@ async def test_gemini_stream_response_accepts_array_payloads_from_live_api() -> 
     ]
     assert events[-1].response.response_id == "resp_array"
     assert events[-1].response.content[0].text == "streamed"
+
+
+@pytest.mark.asyncio
+async def test_gemini_stream_response_decodes_http_error_body() -> None:
+    provider = GeminiProvider()
+    model = _gemini_model(model="gemini-2.5-flash")
+    request = GenerateRequest(messages=[UserMessage(content="hello")])
+    response = HttpResponse(
+        status_code=400,
+        headers={},
+        content=(
+            b'{"error":{"code":400,"message":"Detailed Gemini error","status":"INVALID_ARGUMENT"}}'
+        ),
+        url="https://example.test/gemini",
+    )
+
+    events = [
+        event
+        async for event in provider.stream_response(
+            model=model,
+            request=request,
+            options=RequestOptions(),
+            http=_ErrorHttpTransport(response),
+        )
+    ]
+
+    assert [event.type for event in events] == ["error"]
+    assert events[0].error.code == "invalid_argument"
+    assert events[0].error.message == "Detailed Gemini error"
+    assert events[0].error.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_gemini_stream_response_decodes_invalid_api_key_error_details() -> None:
+    provider = GeminiProvider()
+    model = _gemini_model(model="gemini-2.5-flash")
+    request = GenerateRequest(messages=[UserMessage(content="hello")])
+    response = HttpResponse(
+        status_code=400,
+        headers={},
+        content=(
+            b'[{"error":{"code":400,"status":"INVALID_ARGUMENT","details":['
+            b'{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"API_KEY_INVALID","domain":"googleapis.com"},'
+            b'{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"API key expired. Please renew the API key."}'
+            b']}}]'
+        ),
+        url="https://example.test/gemini",
+    )
+
+    events = [
+        event
+        async for event in provider.stream_response(
+            model=model,
+            request=request,
+            options=RequestOptions(),
+            http=_ErrorHttpTransport(response),
+        )
+    ]
+
+    assert [event.type for event in events] == ["error"]
+    assert events[0].error.code == "authentication_error"
+    assert events[0].error.message == "API key expired. Please renew the API key."
+    assert isinstance(exception_from_error_info(events[0].error), AuthenticationError)

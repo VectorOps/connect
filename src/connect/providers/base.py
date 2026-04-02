@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing
 
 from ..exceptions import make_error_info
+from ..transport.http import HttpResponse
 from ..types import ErrorInfo, GenerateRequest, ModelSpec, RequestOptions, SpecificToolChoice, Usage
 
 
@@ -124,6 +125,54 @@ class BaseProviderAdapter:
             retryable=retryable,
             raw=raw,
         )
+
+    def build_http_error(self, response: HttpResponse) -> ErrorInfo:
+        retryable = response.status_code in {408, 429} or response.status_code >= 500
+
+        try:
+            payload = response.json()
+        except Exception:
+            payload = None
+
+        if payload is not None:
+            normalized_payload = self._normalize_http_error_payload(payload)
+            error = self.build_error(
+                normalized_payload,
+                status_code=response.status_code,
+                retryable=retryable,
+            )
+            if error.raw is not None:
+                return error.model_copy(update={"raw": payload if isinstance(payload, dict) else {"body": payload}})
+
+            raw = payload if isinstance(payload, dict) else {"body": payload}
+            return error.model_copy(update={"raw": raw})
+
+        body_text = response.text().strip()
+        return make_error_info(
+            code=self._status_code_to_code(response.status_code),
+            message=body_text or f"HTTP {response.status_code}",
+            provider=self.provider_name,
+            api_family=self.api_family,
+            status_code=response.status_code,
+            retryable=retryable,
+            raw={"body": body_text} if body_text else None,
+        )
+
+    def _status_code_to_code(self, status_code: int) -> str:
+        if status_code in {401, 403}:
+            return "authentication_error"
+        if status_code in {408, 429}:
+            return "rate_limit"
+        if status_code >= 500:
+            return "server_error"
+        return f"http_{status_code}"
+
+    def _normalize_http_error_payload(self, payload: typing.Any) -> typing.Any:
+        if isinstance(payload, list) and len(payload) == 1 and isinstance(payload[0], dict):
+            candidate = payload[0]
+            if any(key in candidate for key in ("error", "message", "detail")):
+                return candidate
+        return payload
 
     def map_tool_choice(self, tool_choice: str | SpecificToolChoice | None) -> typing.Any:
         if tool_choice is None:

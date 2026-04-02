@@ -7,6 +7,7 @@ import pytest
 from connect.auth import ChatGPTAccessTokenAuth
 from connect.providers import AnthropicProvider, GeminiProvider, OpenAIProvider, OpenRouterProvider
 from connect.registry import default_provider_registry
+from connect.transport.http import HttpResponse, HttpStatusError
 from connect.types import (
     AssistantMessage,
     GenerateRequest,
@@ -51,6 +52,14 @@ class _FakeHttpTransport:
     async def stream(self, method: str, url: str, **kwargs):
         self.calls.append({"method": method, "url": url, **kwargs})
         return self.response
+
+
+class _ErrorHttpTransport:
+    def __init__(self, response: HttpResponse) -> None:
+        self.response = response
+
+    async def stream(self, method: str, url: str, **kwargs):
+        raise HttpStatusError(self.response)
 
 
 def _openai_model(**updates) -> ModelSpec:
@@ -204,6 +213,12 @@ def test_openai_build_payload_serializes_multimodal_history_and_controls() -> No
     assert payload["stream"] is True
     assert payload["tools"][0]["type"] == "function"
     assert payload["tools"][0]["strict"] is True
+    assert payload["tools"][0]["parameters"] == {
+        "type": "object",
+        "properties": {"detail": {"type": "string"}},
+        "required": ["detail"],
+        "additionalProperties": False,
+    }
     assert payload["tool_choice"] == "required"
     assert payload["reasoning"] == {"effort": "medium", "summary": "detailed"}
     assert payload["text"]["format"]["type"] == "json_schema"
@@ -216,6 +231,42 @@ def test_openai_build_payload_serializes_multimodal_history_and_controls() -> No
     assert payload["input"][1]["type"] == "function_call"
     assert payload["input"][2]["type"] == "function_call_output"
     assert payload["input"][2]["output"][1]["image_url"].startswith("data:image/png;base64,")
+
+
+def test_openai_build_payload_preserves_optional_properties_when_tool_is_non_strict() -> None:
+    provider = OpenAIProvider()
+    model = _openai_model()
+    request = GenerateRequest(
+        messages=[UserMessage(content="Hello")],
+        tools=[
+            ToolSpec(
+                name="lookup",
+                description="Lookup data",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "limit": {"type": "integer"},
+                    },
+                    "required": ["query"],
+                },
+                strict=False,
+            )
+        ],
+    )
+
+    payload = provider.build_payload(model, request, RequestOptions())
+
+    assert payload["tools"][0]["strict"] is False
+    assert payload["tools"][0]["parameters"] == {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string"},
+            "limit": {"type": "integer"},
+        },
+        "required": ["query"],
+        "additionalProperties": False,
+    }
 
 
 def test_openai_build_payload_supports_empty_tool_result_output() -> None:
@@ -716,6 +767,36 @@ async def test_openai_stream_response_captures_cached_and_partial_usage() -> Non
     assert events[-1].response.usage.cache_read_tokens == 2
     assert events[-1].response.usage.cache_write_tokens == 1
     assert events[-1].response.usage.total_tokens == 11
+
+
+@pytest.mark.asyncio
+async def test_openai_stream_response_decodes_http_error_body() -> None:
+    provider = OpenAIProvider()
+    model = _openai_model()
+    request = GenerateRequest(messages=[UserMessage(content="Hello")])
+    response = HttpResponse(
+        status_code=400,
+        headers={},
+        content=(
+            b'{"error":{"message":"Detailed OpenAI error","type":"invalid_request_error","code":"bad_input"}}'
+        ),
+        url="https://example.test/openai",
+    )
+
+    events = [
+        event
+        async for event in provider.stream_response(
+            model=model,
+            request=request,
+            options=RequestOptions(),
+            http=_ErrorHttpTransport(response),
+        )
+    ]
+
+    assert [event.type for event in events] == ["error"]
+    assert events[0].error.code == "bad_input"
+    assert events[0].error.message == "Detailed OpenAI error"
+    assert events[0].error.status_code == 400
 
 
 def test_openrouter_provider_applies_routing_headers_and_payload() -> None:

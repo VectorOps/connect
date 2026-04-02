@@ -18,6 +18,11 @@ from connect import (
     UserMessage,
 )
 from connect.auth_env import resolve_env_auth
+from tests.integration._live_test_utils import (
+    build_history_assistant_message,
+    build_lookup_status_tool_result,
+    build_lookup_status_tool_spec,
+)
 
 
 pytestmark = [
@@ -126,23 +131,21 @@ async def test_anthropic_stream_live_emits_text_events_and_final_response() -> N
 async def test_anthropic_tool_call_and_tool_result_round_trip_live() -> None:
     _require_anthropic_key()
 
-    tool_prompt = "Use the lookup_status tool for id 'alpha'. Do not answer directly."
-    tool_spec = ToolSpec(
-        name="lookup_status",
-        description="Lookup a status string for a known identifier.",
-        input_schema={
-            "type": "object",
-            "properties": {"id": {"type": "string"}},
-            "required": ["id"],
-            "additionalProperties": False,
-        },
+    first_prompt = (
+        "I am checking a rollout. Call lookup_status exactly once for id 'alpha' "
+        "and wait for the tool result before answering."
     )
+    second_prompt = (
+        "Thanks. Now check id 'beta' with the same tool and then compare beta with alpha "
+        "in one short sentence."
+    )
+    tool_spec = build_lookup_status_tool_spec()
 
     async with AsyncLLMClient() as client:
-        tool_response = await client.generate(
+        first_tool_response = await client.generate(
             ANTHROPIC_TEXT_MODEL,
             GenerateRequest(
-                messages=[UserMessage(content=tool_prompt)],
+                messages=[UserMessage(content=first_prompt)],
                 tools=[tool_spec],
                 tool_choice=SpecificToolChoice(name="lookup_status"),
                 max_output_tokens=128,
@@ -150,34 +153,75 @@ async def test_anthropic_tool_call_and_tool_result_round_trip_live() -> None:
             options=RequestOptions(auth=_anthropic_auth()),
         )
 
-        tool_calls = _tool_calls_from_response(tool_response)
-        assert tool_calls, f"expected a tool call, got content: {tool_response.content!r}"
-        tool_call = tool_calls[0]
-        assert tool_call.name == "lookup_status"
-        assert tool_call.arguments.get("id") == "alpha"
+        first_tool_calls = _tool_calls_from_response(first_tool_response)
+        assert first_tool_calls, f"expected a tool call, got content: {first_tool_response.content!r}"
+        first_tool_call = first_tool_calls[0]
+        assert first_tool_call.name == "lookup_status"
+        assert first_tool_call.arguments.get("id") == "alpha"
 
-        final_response = await client.generate(
+        first_history = [
+            UserMessage(content=first_prompt),
+            build_history_assistant_message(first_tool_response),
+            build_lookup_status_tool_result(first_tool_call, status="green"),
+        ]
+        first_answer_response = await client.generate(
             ANTHROPIC_TEXT_MODEL,
             GenerateRequest(
-                messages=[
-                    UserMessage(content=tool_prompt),
-                    AssistantMessage(content=tool_response.content),
-                    ToolResultMessage(
-                        tool_call_id=tool_call.id,
-                        tool_name=tool_call.name,
-                        content=[TextBlock(text="status=green")],
-                    ),
-                ],
+                messages=first_history,
                 system_prompt="Answer in one short sentence and include the exact status value.",
                 max_output_tokens=64,
             ),
             options=RequestOptions(auth=_anthropic_auth()),
         )
 
-    _print_usage("anthropic tool call", tool_response)
+        second_history = [
+            *first_history,
+            build_history_assistant_message(first_answer_response),
+            UserMessage(content=second_prompt),
+        ]
+        second_tool_response = await client.generate(
+            ANTHROPIC_TEXT_MODEL,
+            GenerateRequest(
+                messages=second_history,
+                tools=[tool_spec],
+                tool_choice=SpecificToolChoice(name="lookup_status"),
+                max_output_tokens=128,
+            ),
+            options=RequestOptions(auth=_anthropic_auth()),
+        )
+
+        second_tool_calls = _tool_calls_from_response(second_tool_response)
+        assert second_tool_calls, f"expected a tool call, got content: {second_tool_response.content!r}"
+        second_tool_call = second_tool_calls[0]
+        assert second_tool_call.name == "lookup_status"
+        assert second_tool_call.arguments.get("id") == "beta"
+
+        final_response = await client.generate(
+            ANTHROPIC_TEXT_MODEL,
+            GenerateRequest(
+                messages=[
+                    *second_history,
+                    build_history_assistant_message(second_tool_response),
+                    build_lookup_status_tool_result(second_tool_call, status="yellow"),
+                ],
+                system_prompt=(
+                    "Answer naturally in one short sentence and mention alpha and beta with their exact "
+                    "status values."
+                ),
+                max_output_tokens=96,
+            ),
+            options=RequestOptions(auth=_anthropic_auth()),
+        )
+
+    _print_usage("anthropic tool call alpha", first_tool_response)
+    _print_usage("anthropic tool result alpha", first_answer_response)
+    _print_usage("anthropic tool call beta", second_tool_response)
     _print_usage("anthropic tool result", final_response)
     final_text = _text_from_response(final_response).lower()
+    assert "alpha" in final_text
+    assert "beta" in final_text
     assert "green" in final_text
+    assert "yellow" in final_text
 
 
 @pytest.mark.asyncio

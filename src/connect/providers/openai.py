@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import copy
 import json
 from collections.abc import AsyncIterator
 from typing import Any
 
 from ..exceptions import ConnectError, PermanentProviderError, ProviderProtocolError, make_error_info
+from ..transport.http import HttpStatusError
 from ..transport.assembly import ResponseAssembler
 from ..transport.sse import iter_sse_response
 from ..types import (
@@ -91,6 +93,33 @@ class OpenAIProvider(BaseProviderAdapter):
             headers.update({str(key): str(value) for key, value in default_headers.items()})
         return headers
 
+    def build_error(
+        self,
+        payload: Any,
+        *,
+        status_code: int | None = None,
+        retryable: bool = False,
+    ) -> Any:
+        raw = payload if isinstance(payload, dict) else None
+        if isinstance(payload, dict) and isinstance(payload.get("error"), dict):
+            payload = payload["error"]
+
+        code = "provider_error"
+        message = "Provider request failed"
+        if isinstance(payload, dict):
+            code = str(payload.get("code") or payload.get("type") or code)
+            message = str(payload.get("message") or message)
+
+        return make_error_info(
+            code=code,
+            message=message,
+            provider=self.provider_name,
+            api_family=self.api_family,
+            status_code=status_code,
+            retryable=retryable,
+            raw=raw,
+        )
+
     def build_payload(
         self,
         model: ModelSpec,
@@ -118,7 +147,10 @@ class OpenAIProvider(BaseProviderAdapter):
                     "type": "function",
                     "name": tool.name,
                     "description": tool.description,
-                    "parameters": tool.input_schema,
+                    "parameters": self._convert_tool_schema(
+                        tool.input_schema,
+                        strict=True if tool.strict is None else tool.strict,
+                    ),
                     "strict": True if tool.strict is None else tool.strict,
                 }
                 for tool in request.tools
@@ -216,6 +248,9 @@ class OpenAIProvider(BaseProviderAdapter):
                 timeout=options.timeout,
                 expected_status=200,
             )
+        except HttpStatusError as exc:
+            yield assembler.error(self.build_http_error(exc.response))
+            return
         except ConnectError as exc:
             yield assembler.error(exc.error)
             return
@@ -367,6 +402,50 @@ class OpenAIProvider(BaseProviderAdapter):
                 "arguments": json.dumps(block.arguments),
             }
         raise TypeError(f"Unsupported assistant block type: {block.type!r}")
+
+    def _convert_tool_schema(self, schema: dict[str, Any], *, strict: bool) -> dict[str, Any]:
+        if not strict:
+            return copy.deepcopy(schema)
+        return self._force_strict_object_schema(schema)
+
+    def _force_strict_object_schema(self, schema: Any) -> Any:
+        if isinstance(schema, list):
+            return [self._force_strict_object_schema(item) for item in schema]
+        if not isinstance(schema, dict):
+            return schema
+
+        normalized: dict[str, Any] = {}
+        for key, value in schema.items():
+            if key == "properties" and isinstance(value, dict):
+                normalized[key] = {
+                    property_name: self._force_strict_object_schema(property_schema)
+                    for property_name, property_schema in value.items()
+                }
+            elif key == "items":
+                normalized[key] = self._force_strict_object_schema(value)
+            elif key in {"anyOf", "oneOf", "allOf"} and isinstance(value, list):
+                normalized[key] = [self._force_strict_object_schema(item) for item in value]
+            elif key in {"additionalProperties", "not", "if", "then", "else", "contains", "propertyNames"} and isinstance(value, dict):
+                normalized[key] = self._force_strict_object_schema(value)
+            else:
+                normalized[key] = copy.deepcopy(value)
+
+        is_object_schema = (
+            normalized.get("type") == "object"
+            or "properties" in normalized
+            or "required" in normalized
+            or "additionalProperties" in normalized
+        )
+        if is_object_schema:
+            normalized["type"] = "object"
+            properties = normalized.get("properties")
+            if not isinstance(properties, dict):
+                properties = {}
+                normalized["properties"] = properties
+            normalized["required"] = list(properties.keys())
+            normalized["additionalProperties"] = False
+
+        return normalized
 
     def _build_reasoning_payload(self, model: ModelSpec, request: GenerateRequest) -> dict[str, Any] | None:
         reasoning = request.reasoning

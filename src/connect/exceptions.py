@@ -34,14 +34,21 @@ class PermanentProviderError(ConnectError):
 
 
 def exception_from_error_info(error: ErrorInfo) -> ConnectError:
+    code = error.code.lower()
+    message = error.message.lower()
+
     if error.status_code in {401, 403}:
+        return AuthenticationError(error)
+
+    if code in {"authentication_error", "unauthenticated", "api_key_invalid", "invalid_api_key"}:
         return AuthenticationError(error)
 
     if error.status_code in {408, 429}:
         return RateLimitError(error)
 
-    message = error.message.lower()
-    code = error.code.lower()
+    if code in {"rate_limit", "resource_exhausted"}:
+        return RateLimitError(error)
+
     if "context" in message and ("limit" in message or "length" in message):
         return ContextLengthError(error)
     if "context" in code and ("limit" in code or "length" in code):

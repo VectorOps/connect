@@ -5,6 +5,7 @@ import json
 import pytest
 
 from connect.providers import AnthropicProvider
+from connect.transport.http import HttpResponse, HttpStatusError
 from connect.types import (
     AssistantMessage,
     GenerateRequest,
@@ -49,6 +50,14 @@ class _FakeHttpTransport:
     async def stream(self, method: str, url: str, **kwargs):
         self.calls.append({"method": method, "url": url, **kwargs})
         return self.response
+
+
+class _ErrorHttpTransport:
+    def __init__(self, response: HttpResponse) -> None:
+        self.response = response
+
+    async def stream(self, method: str, url: str, **kwargs):
+        raise HttpStatusError(self.response)
 
 
 def _anthropic_model(**updates) -> ModelSpec:
@@ -138,6 +147,12 @@ def test_anthropic_build_payload_serializes_multimodal_history_tools_and_reasoni
     assert payload["messages"][2]["content"][0]["content"][1]["type"] == "image"
     assert payload["messages"][2]["content"][0]["cache_control"] == {"type": "ephemeral"}
     assert payload["tools"][0]["name"] == "inspect_image"
+    assert payload["tools"][0]["input_schema"] == {
+        "type": "object",
+        "properties": {"detail": {"type": "string"}},
+        "required": [],
+        "additionalProperties": False,
+    }
     assert payload["tool_choice"] == {"type": "tool", "name": "inspect_image"}
     assert payload["thinking"] == {"type": "enabled", "budget_tokens": 2048}
     assert "temperature" not in payload
@@ -420,3 +435,33 @@ async def test_anthropic_stream_response_emits_error_for_malformed_tool_argument
 
     assert events[-1].type == "error"
     assert events[-1].error.code == "invalid_tool_arguments"
+
+
+@pytest.mark.asyncio
+async def test_anthropic_stream_response_decodes_http_error_body() -> None:
+    provider = AnthropicProvider()
+    model = _anthropic_model()
+    request = GenerateRequest(messages=[UserMessage(content="Hello")])
+    response = HttpResponse(
+        status_code=400,
+        headers={},
+        content=(
+            b'{"type":"error","error":{"type":"invalid_request_error","message":"Detailed Anthropic error"}}'
+        ),
+        url="https://example.test/anthropic",
+    )
+
+    events = [
+        event
+        async for event in provider.stream_response(
+            model=model,
+            request=request,
+            options=RequestOptions(),
+            http=_ErrorHttpTransport(response),
+        )
+    ]
+
+    assert [event.type for event in events] == ["error"]
+    assert events[0].error.code == "invalid_request_error"
+    assert events[0].error.message == "Detailed Anthropic error"
+    assert events[0].error.status_code == 400

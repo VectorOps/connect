@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from connect.auth import AuthContext, ResolvedAuth
-from connect.transport.http import HttpTransport
+from connect.transport.http import HttpStatusError, HttpTransport
 
 
 class _RefreshableAuth:
@@ -41,7 +41,9 @@ class _FakeResponse:
         return self._body
 
     async def json(self, content_type=None):
-        return {}
+        import json
+
+        return json.loads(self._body.decode())
 
     async def text(self) -> str:
         return self._body.decode()
@@ -69,28 +71,24 @@ class _FakeSession:
         self.closed = True
 
 
-def test_extract_error_message_prefers_nested_error_message() -> None:
-    transport = HttpTransport.__new__(HttpTransport)
+@pytest.mark.asyncio
+async def test_http_transport_raises_raw_status_error_with_response_body() -> None:
+    class _ErrorSession:
+        closed = False
 
-    message = transport._extract_error_message(
-        {
-            "error": {
-                "error": {
-                    "message": "vendor nested message",
-                }
-            }
-        }
-    )
+        async def request(self, method, url, **kwargs):
+            return _FakeResponse(400, body=b'{"error":{"message":"bad request"}}')
 
-    assert message == "vendor nested message"
+        async def close(self) -> None:
+            self.closed = True
 
+    transport = HttpTransport(session=_ErrorSession())
 
-def test_extract_error_message_uses_detail_when_message_missing() -> None:
-    transport = HttpTransport.__new__(HttpTransport)
+    with pytest.raises(HttpStatusError) as exc_info:
+        await transport.request("GET", "https://example.test")
 
-    message = transport._extract_error_message({"detail": "provider detail text"})
-
-    assert message == "provider detail text"
+    assert exc_info.value.response.status_code == 400
+    assert exc_info.value.response.json() == {"error": {"message": "bad request"}}
 
 
 @pytest.mark.asyncio

@@ -251,6 +251,12 @@ Tools and multimodal inputs
 
 VectorOps Connect supports tool calling and multimodal turns through the shared request model.
 
+Tool definitions use a canonical internal tool schema for custom function inputs.
+That schema is a vendor-neutral JSON Schema object definition, not any provider's
+wire format. Provider adapters convert that canonical schema into transport-level
+ definitions such as OpenAI `parameters`, Anthropic `input_schema`, and Gemini
+`parametersJsonSchema`. See `docs/tool_schema.md` for details.
+
 Example tool definition:
 
 ```python
