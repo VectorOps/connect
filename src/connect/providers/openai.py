@@ -831,22 +831,36 @@ class OpenAIProvider(BaseProviderAdapter):
             arguments = event.get("arguments") or item.get("arguments")
             if isinstance(arguments, str) and arguments:
                 try:
-                    parsed_arguments = json.loads(arguments)
-                except json.JSONDecodeError:
+                    parsed_arguments = self.parse_tool_call_arguments(arguments, index=index)
+                except ProviderProtocolError:
                     emitted.append(assembler.tool_call_delta(index, arguments))
-                    parsed_arguments = None
-                else:
-                    emitted.append(assembler.tool_call_end(index, arguments=parsed_arguments))
-                    protocol_meta = {}
-                    if item_id:
-                        protocol_meta["openai_item_id"] = item_id
-                    call_status = item.get("status")
-                    if isinstance(call_status, str) and call_status:
-                        protocol_meta["openai_status"] = call_status
-                    if protocol_meta:
-                        assembler.update_block_metadata(index, protocol_meta=protocol_meta)
-                    return emitted, False
-            emitted.append(assembler.tool_call_end(index, arguments=arguments if isinstance(arguments, dict) else None))
+                    parsed_arguments = self.parse_tool_call_arguments(
+                        assembler.take_tool_call_buffer(index),
+                        index=index,
+                    )
+                emitted.append(assembler.tool_call_end(index, arguments=parsed_arguments))
+                protocol_meta = {}
+                if item_id:
+                    protocol_meta["openai_item_id"] = item_id
+                call_status = item.get("status")
+                if isinstance(call_status, str) and call_status:
+                    protocol_meta["openai_status"] = call_status
+                if protocol_meta:
+                    assembler.update_block_metadata(index, protocol_meta=protocol_meta)
+                return emitted, False
+
+            if isinstance(arguments, dict):
+                emitted.append(assembler.tool_call_end(index, arguments=arguments))
+            else:
+                emitted.append(
+                    assembler.tool_call_end(
+                        index,
+                        arguments=self.parse_tool_call_arguments(
+                            assembler.take_tool_call_buffer(index),
+                            index=index,
+                        ),
+                    )
+                )
             protocol_meta = {}
             if item_id:
                 protocol_meta["openai_item_id"] = item_id

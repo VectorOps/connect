@@ -410,7 +410,6 @@ class ErrorInfo(pydantic.BaseModel):
 FinishReason = typing.Literal[
     "stop",
     "length",
-    "tool_use",
     "tool_call",
     "content_filter",
     "cancelled",

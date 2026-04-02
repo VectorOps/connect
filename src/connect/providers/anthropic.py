@@ -348,7 +348,13 @@ class AnthropicProvider(BaseProviderAdapter):
                     if block_type == "tool_use":
                         try:
                             if index in tool_call_streamed_arguments:
-                                yield assembler.tool_call_end(index)
+                                yield assembler.tool_call_end(
+                                    index,
+                                    arguments=self.parse_tool_call_arguments(
+                                        assembler.take_tool_call_buffer(index),
+                                        index=index,
+                                    ),
+                                )
                             else:
                                 yield assembler.tool_call_end(
                                     index,
@@ -376,16 +382,12 @@ class AnthropicProvider(BaseProviderAdapter):
                     final_usage = self.build_usage(usage_payload, completeness="final")
                     if final_usage is not None:
                         yield assembler.set_usage(final_usage)
-                    if assembler.has_tool_calls() and finish_reason == "tool_use":
-                        finish_reason = "tool_call"
                     yield assembler.response_end(finish_reason=finish_reason)
                     return
 
         final_usage = self.build_usage(usage_payload, completeness="partial")
         if final_usage is not None:
             yield assembler.set_usage(final_usage)
-        if assembler.has_tool_calls() and finish_reason == "tool_use":
-            finish_reason = "tool_call"
         yield assembler.response_end(finish_reason=finish_reason)
 
     def normalize_finish_reason(self, value: str | None) -> str:
@@ -395,7 +397,7 @@ class AnthropicProvider(BaseProviderAdapter):
         if normalized == "max_tokens":
             return "length"
         if normalized == "tool_use":
-            return "tool_use"
+            return "tool_call"
         if normalized in {"refusal", "sensitive"}:
             return "content_filter"
         return super().normalize_finish_reason(normalized or value)

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 from ..exceptions import ProviderProtocolError, make_error_info
 from ..types import (
     AssistantResponse,
@@ -145,6 +143,10 @@ class ResponseAssembler:
         self._tool_call_buffers[index] = self._tool_call_buffers.get(index, "") + delta
         return ToolCallDeltaEvent(index=index, delta=delta)
 
+    def take_tool_call_buffer(self, index: int) -> str:
+        self._require_block(index, ToolCallBlock, "tool_call")
+        return self._tool_call_buffers.pop(index, "")
+
     def tool_call_end(
         self,
         index: int,
@@ -152,27 +154,8 @@ class ResponseAssembler:
         arguments: dict | None = None,
     ) -> ToolCallEndEvent:
         block = self._require_block(index, ToolCallBlock, "tool_call")
-        if arguments is None:
-            raw_arguments = self._tool_call_buffers.pop(index, "").strip()
-            if not raw_arguments:
-                block.arguments = {}
-            else:
-                try:
-                    block.arguments = json.loads(raw_arguments)
-                except json.JSONDecodeError as exc:
-                    raise ProviderProtocolError(
-                        make_error_info(
-                            code="invalid_tool_arguments",
-                            message=f"Invalid streamed tool-call arguments at index {index}",
-                            provider=self.provider,
-                            api_family=self.api_family,
-                            retryable=False,
-                            raw={"arguments": raw_arguments},
-                        )
-                    ) from exc
-        else:
-            self._tool_call_buffers.pop(index, None)
-            block.arguments = arguments
+        self._tool_call_buffers.pop(index, None)
+        block.arguments = arguments or {}
 
         return ToolCallEndEvent(index=index, tool_call=block)
 

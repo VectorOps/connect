@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import typing
 
 from ..exceptions import make_error_info
+from ..exceptions import ProviderProtocolError
 from ..transport.http import HttpResponse
 from ..types import ErrorInfo, GenerateRequest, ModelSpec, RequestOptions, SpecificToolChoice, Usage
 
@@ -180,3 +182,36 @@ class BaseProviderAdapter:
         if isinstance(tool_choice, SpecificToolChoice):
             return {"type": "function", "name": tool_choice.name}
         return tool_choice
+
+    def parse_tool_call_arguments(self, raw_arguments: str, *, index: int) -> dict[str, typing.Any]:
+        normalized = raw_arguments.strip()
+        if not normalized:
+            return {}
+
+        try:
+            parsed = json.loads(normalized)
+        except json.JSONDecodeError as exc:
+            raise ProviderProtocolError(
+                make_error_info(
+                    code="invalid_tool_arguments",
+                    message=f"Invalid streamed tool-call arguments at index {index}",
+                    provider=self.provider_name,
+                    api_family=self.api_family,
+                    retryable=False,
+                    raw={"arguments": normalized},
+                )
+            ) from exc
+
+        if not isinstance(parsed, dict):
+            raise ProviderProtocolError(
+                make_error_info(
+                    code="invalid_tool_arguments",
+                    message=f"Tool-call arguments at index {index} must decode to a JSON object",
+                    provider=self.provider_name,
+                    api_family=self.api_family,
+                    retryable=False,
+                    raw={"arguments": normalized},
+                )
+            )
+
+        return parsed

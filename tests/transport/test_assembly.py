@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from connect.exceptions import ProviderProtocolError
 from connect.transport.assembly import ResponseAssembler
 from connect.types import ErrorInfo, Usage
 
@@ -32,7 +33,7 @@ def test_response_assembler_builds_complete_response() -> None:
 
     assembler.tool_call_start(2, tool_call_id="call_1", name="search")
     assembler.tool_call_delta(2, '{"query":"docs"}')
-    tool_end = assembler.tool_call_end(2)
+    tool_end = assembler.tool_call_end(2, arguments=json.loads(assembler.take_tool_call_buffer(2)))
     assert tool_end.tool_call.arguments == {"query": "docs"}
 
     usage_event = assembler.set_usage(Usage(input_tokens=1, output_tokens=2, total_tokens=3, completeness="final"))
@@ -48,7 +49,7 @@ def test_response_assembler_builds_complete_response() -> None:
     assert response.provider_meta == {"account": "acct_1"}
 
 
-def test_response_assembler_rejects_invalid_tool_argument_json() -> None:
+def test_response_assembler_exposes_raw_tool_argument_buffer() -> None:
     assembler = ResponseAssembler(
         provider="openai",
         model="gpt-test",
@@ -58,8 +59,8 @@ def test_response_assembler_rejects_invalid_tool_argument_json() -> None:
     assembler.tool_call_start(0, tool_call_id="call_1", name="search")
     assembler.tool_call_delta(0, '{"query":')
 
-    with pytest.raises(ProviderProtocolError):
-        assembler.tool_call_end(0)
+    assert assembler.take_tool_call_buffer(0) == '{"query":'
+    assert assembler.tool_call_end(0).tool_call.arguments == {}
 
 
 def test_response_assembler_returns_partial_response_on_error() -> None:
