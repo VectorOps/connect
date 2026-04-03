@@ -371,7 +371,7 @@ class GenerateRequest(pydantic.BaseModel):
 class RequestOptions(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
-    timeout: float | aiohttp.ClientTimeout | None = 60.0
+    timeout: float | aiohttp.ClientTimeout | None = None
     headers: dict[str, str] = pydantic.Field(default_factory=dict)
     auth: TransportAuth | None = None
     idempotency_key: str | None = None
