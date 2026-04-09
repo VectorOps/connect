@@ -271,6 +271,46 @@ def test_anthropic_build_payload_batches_consecutive_tool_results() -> None:
     }
 
 
+def test_anthropic_build_payload_accepts_generated_assistant_message_verbatim() -> None:
+    provider = AnthropicProvider()
+    model = _anthropic_model()
+    assistant = AssistantMessage(
+        provider="anthropic",
+        model="claude-3-7-sonnet-latest",
+        api_family="anthropic-messages",
+        finish_reason="tool_call",
+        response_id="msg_123",
+        content=[
+            ReasoningBlock(
+                text="Need a tool",
+                signature="sig_reasoning",
+                protocol_meta={
+                    "anthropic_provider": "anthropic",
+                    "anthropic_model": "claude-3-7-sonnet-latest",
+                },
+            ),
+            ToolCallBlock(id="call_1", name="lookup", arguments={"id": "alpha"}),
+        ],
+    )
+
+    payload = provider.build_payload(
+        model,
+        GenerateRequest(
+            messages=[
+                UserMessage(content="first"),
+                assistant,
+                ToolResultMessage(tool_call_id="call_1", tool_name="lookup", content=[TextBlock(text="ok")]),
+                UserMessage(content="next"),
+            ]
+        ),
+        RequestOptions(),
+    )
+
+    assert payload["messages"][1]["role"] == "assistant"
+    assert payload["messages"][1]["content"][0]["type"] == "thinking"
+    assert payload["messages"][1]["content"][1]["type"] == "tool_use"
+
+
 @pytest.mark.asyncio
 async def test_anthropic_stream_response_normalizes_reasoning_tool_calls_and_usage() -> None:
     provider = AnthropicProvider()

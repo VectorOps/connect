@@ -11,7 +11,7 @@ from .auth_router import AuthCredentialManager, DynamicAuthRouter
 from .exceptions import ConnectError, exception_from_error_info
 from .registry import ModelRegistry, ProviderRegistry, default_model_registry, default_provider_registry
 from .transport import HttpTransport
-from .types import AssistantResponse, GenerateRequest, ModelSpec, RequestOptions, StreamEvent, validate_request_for_model
+from .types import AssistantMessage, GenerateRequest, ModelSpec, RequestOptions, StreamEvent, validate_request_for_model
 
 
 class StreamHandle:
@@ -24,7 +24,7 @@ class StreamHandle:
         self._iterator = iterator
         self._close_callback = close_callback
         self._done = False
-        self._final_response: AssistantResponse | None = None
+        self._final_response: AssistantMessage | None = None
         self._error: ConnectError | None = None
         self._closed = False
 
@@ -46,7 +46,7 @@ class StreamHandle:
             await self._maybe_close()
         return event
 
-    async def final_response(self) -> AssistantResponse:
+    async def final_response(self) -> AssistantMessage:
         if self._final_response is not None:
             return self._final_response
         if self._error is not None:
@@ -103,7 +103,7 @@ class AsyncLLMClient:
         *,
         provider: str | None = None,
         options: RequestOptions | None = None,
-    ) -> AssistantResponse:
+    ) -> AssistantMessage:
         stream = self.stream(model, request, provider=provider, options=options)
         return await stream.final_response()
 
@@ -247,7 +247,7 @@ async def generate(
     *,
     provider: str | None = None,
     options: RequestOptions | None = None,
-) -> AssistantResponse:
+) -> AssistantMessage:
     async with AsyncLLMClient() as client:
         return await client.generate(model, request, provider=provider, options=options)
 

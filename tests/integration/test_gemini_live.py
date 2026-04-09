@@ -19,7 +19,6 @@ from connect import (
 )
 from connect.auth_env import resolve_env_auth
 from tests.integration._live_test_utils import (
-    build_history_assistant_message,
     build_lookup_status_tool_result,
     build_lookup_status_tool_spec,
 )
@@ -163,7 +162,7 @@ async def test_gemini_tool_call_and_tool_result_round_trip_live() -> None:
 
         first_history = [
             UserMessage(content=first_prompt),
-            build_history_assistant_message(first_tool_response),
+            first_tool_response,
             build_lookup_status_tool_result(first_tool_call, status="green"),
         ]
         first_answer_response = await client.generate(
@@ -178,7 +177,7 @@ async def test_gemini_tool_call_and_tool_result_round_trip_live() -> None:
 
         second_history = [
             *first_history,
-            build_history_assistant_message(first_answer_response),
+            first_answer_response,
             UserMessage(content=second_prompt),
         ]
         second_tool_response = await client.generate(
@@ -203,7 +202,7 @@ async def test_gemini_tool_call_and_tool_result_round_trip_live() -> None:
             GenerateRequest(
                 messages=[
                     *second_history,
-                    build_history_assistant_message(second_tool_response),
+                    second_tool_response,
                     build_lookup_status_tool_result(second_tool_call, status="yellow"),
                 ],
                 system_prompt=(

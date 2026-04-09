@@ -267,6 +267,55 @@ def test_gemini_build_payload_disables_default_thinking_when_not_requested() -> 
     assert payload["generationConfig"]["thinkingConfig"] == {"thinkingBudget": 0}
 
 
+def test_gemini_build_payload_accepts_generated_assistant_message_verbatim() -> None:
+    provider = GeminiProvider()
+    model = _gemini_model()
+    assistant = AssistantMessage(
+        provider="gemini",
+        model="gemini-3-pro-preview",
+        api_family="gemini-generate-content",
+        finish_reason="tool_call",
+        response_id="resp_gemini",
+        content=[
+            ReasoningBlock(
+                text="Need a tool",
+                signature="sig_reasoning",
+                protocol_meta={
+                    "gemini_thought_signature": "c2lnX3JlYXNvbmluZw==",
+                    "gemini_provider": "gemini",
+                    "gemini_model": "gemini-3-pro-preview",
+                },
+            ),
+            ToolCallBlock(
+                id="call_1",
+                name="lookup",
+                arguments={"id": "alpha"},
+                protocol_meta={
+                    "gemini_provider": "gemini",
+                    "gemini_model": "gemini-3-pro-preview",
+                },
+            ),
+        ],
+    )
+
+    payload = provider.build_payload(
+        model,
+        GenerateRequest(
+            messages=[
+                UserMessage(content="first"),
+                assistant,
+                ToolResultMessage(tool_call_id="call_1", tool_name="lookup", content=[TextBlock(text="ok")]),
+                UserMessage(content="next"),
+            ]
+        ),
+        RequestOptions(),
+    )
+
+    assert payload["contents"][1]["role"] == "model"
+    assert payload["contents"][1]["parts"][0]["thought"] is True
+    assert payload["contents"][1]["parts"][1]["functionCall"]["id"] == "call_1"
+
+
 @pytest.mark.asyncio
 async def test_gemini_stream_response_normalizes_reasoning_tool_calls_and_usage() -> None:
     provider = GeminiProvider()

@@ -126,12 +126,18 @@ class UserMessage(MetadataModel):
 class AssistantMessage(MetadataModel):
     role: typing.Literal["assistant"] = "assistant"
     content: list[AssistantContentBlock]
+    provider: str | None = None
+    model: str | None = None
+    api_family: str | None = None
+    finish_reason: "FinishReason" = "unknown"
+    usage: "Usage" = pydantic.Field(default_factory=lambda: Usage())
+    response_id: str | None = None
+    request_id: str | None = None
+    protocol_state: dict[str, typing.Any] = pydantic.Field(default_factory=dict)
 
     @pydantic.field_validator("content")
     @classmethod
     def validate_content(cls, value: list[AssistantContentBlock]) -> list[AssistantContentBlock]:
-        if not value:
-            raise ValueError("AssistantMessage.content must not be empty")
         return value
 
 
@@ -418,19 +424,6 @@ FinishReason = typing.Literal[
 ]
 
 
-class AssistantResponse(pydantic.BaseModel):
-    provider: str
-    model: str
-    api_family: str
-    content: list[AssistantContentBlock]
-    finish_reason: FinishReason
-    usage: Usage = pydantic.Field(default_factory=Usage)
-    response_id: str | None = None
-    request_id: str | None = None
-    protocol_state: dict[str, typing.Any] = pydantic.Field(default_factory=dict)
-    provider_meta: dict[str, typing.Any] = pydantic.Field(default_factory=dict)
-
-
 class ResponseStartEvent(pydantic.BaseModel):
     type: typing.Literal["response_start"] = "response_start"
     provider: str
@@ -500,13 +493,13 @@ class UsageEvent(pydantic.BaseModel):
 
 class ResponseEndEvent(pydantic.BaseModel):
     type: typing.Literal["response_end"] = "response_end"
-    response: AssistantResponse
+    response: AssistantMessage
 
 
 class ErrorEvent(pydantic.BaseModel):
     type: typing.Literal["error"] = "error"
     error: ErrorInfo
-    partial_response: AssistantResponse | None = None
+    partial_response: AssistantMessage | None = None
 
 
 StreamEvent = typing.Annotated[

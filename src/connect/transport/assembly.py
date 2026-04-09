@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ..exceptions import ProviderProtocolError, make_error_info
 from ..types import (
-    AssistantResponse,
+    AssistantMessage,
     ErrorEvent,
     ErrorInfo,
     ReasoningBlock,
@@ -186,8 +186,8 @@ class ResponseAssembler:
     def has_tool_calls(self) -> bool:
         return any(isinstance(block, ToolCallBlock) for block in self._content if block is not None)
 
-    def build_response(self, *, finish_reason: str) -> AssistantResponse:
-        return AssistantResponse(
+    def build_response(self, *, finish_reason: str) -> AssistantMessage:
+        return AssistantMessage(
             provider=self.provider,
             model=self.model,
             api_family=self.api_family,
@@ -204,7 +204,7 @@ class ResponseAssembler:
         return ResponseEndEvent(response=self.build_response(finish_reason=finish_reason))
 
     def error(self, error: ErrorInfo) -> ErrorEvent:
-        partial_response = AssistantResponse(
+        partial_response = AssistantMessage(
             provider=self.provider,
             model=self.model,
             api_family=self.api_family,

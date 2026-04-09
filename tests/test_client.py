@@ -11,7 +11,7 @@ from connect.auth_router import DynamicAuthRouter, EnvironmentCredentialManager
 from connect.client import AsyncLLMClient, StreamHandle
 from connect.credentials import ChatGPTCredentials, CredentialManager, OAuthLoginCallbacks, OAuthPrompt
 from connect.registry import ModelRegistry, ProviderRegistry
-from connect.types import GenerateRequest, ModelSpec, RequestOptions, UserMessage
+from connect.types import GenerateRequest, ModelSpec, RequestOptions, TextBlock, ToolResultMessage, UserMessage
 
 
 class _FakeStreamResponse:
@@ -150,6 +150,44 @@ async def test_async_client_generate_uses_default_provider_registry() -> None:
     assert session.requests[0]["headers"]["Authorization"] == "Bearer test-token"
 
 
+@pytest.mark.asyncio
+async def test_async_client_generate_returns_replayable_assistant_message() -> None:
+    session = _FakeClientSession()
+    model = ModelSpec(provider="openai", model="gpt-4.1-mini", api_family="openai-responses")
+    model_registry = ModelRegistry([model])
+    provider_registry = ProviderRegistry()
+    from connect.providers import OpenAIProvider
+
+    provider_registry.register("openai", OpenAIProvider())
+
+    async with AsyncLLMClient(
+        http_client=session,
+        model_registry=model_registry,
+        provider_registry=provider_registry,
+    ) as client:
+        response = await client.generate(
+            "openai/gpt-4.1-mini",
+            GenerateRequest(messages=[UserMessage(content="ping")]),
+            options=RequestOptions(auth=BearerTokenAuth("test-token")),
+        )
+        replayed = await client.generate(
+            "openai/gpt-4.1-mini",
+            GenerateRequest(
+                messages=[
+                    UserMessage(content="ping"),
+                    response,
+                    UserMessage(content="reply with pong again"),
+                ]
+            ),
+            options=RequestOptions(auth=BearerTokenAuth("test-token")),
+        )
+
+    assert response.role == "assistant"
+    assert response.provider == "openai"
+    assert response.api_family == "openai-responses"
+    assert replayed.content[0].text == "pong"
+
+
 def test_credential_manager_registers_chatgpt_provider_by_default() -> None:
     manager = CredentialManager()
 
@@ -276,14 +314,14 @@ async def test_stream_handle_invokes_close_callback_on_terminal_event() -> None:
     closed: list[str] = []
 
     async def _iterator():
-        from connect.types import AssistantResponse, ResponseEndEvent, Usage
+        from connect.types import AssistantMessage, ResponseEndEvent, Usage
 
         yield ResponseEndEvent(
-            response=AssistantResponse(
+            response=AssistantMessage(
                 provider="openai",
                 model="gpt-4.1-mini",
                 api_family="openai-responses",
-                content=[],
+                content=[TextBlock(text="done")],
                 finish_reason="stop",
                 usage=Usage(),
                 response_id="resp_test",

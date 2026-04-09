@@ -370,6 +370,53 @@ def test_openai_build_payload_preserves_reasoning_replay_metadata() -> None:
     assert payload["input"][4]["encrypted_content"] == "enc_abc"
 
 
+def test_openai_build_payload_accepts_generated_assistant_message_verbatim() -> None:
+    provider = OpenAIProvider()
+    model = _openai_model()
+    assistant = AssistantMessage(
+        provider="openai",
+        model="gpt-4.1-mini",
+        api_family="openai-responses",
+        finish_reason="tool_call",
+        response_id="resp_123",
+        content=[
+            TextBlock(
+                text="Prior assistant text",
+                protocol_meta={
+                    "openai_message_id": "msg_123",
+                    "openai_message_phase": "final_answer",
+                },
+            ),
+            ReasoningBlock(
+                text="Reasoning summary",
+                protocol_meta={
+                    "openai_reasoning_id": "rs_123",
+                    "openai_encrypted_content": "enc_abc",
+                },
+            ),
+            ToolCallBlock(id="call_1", name="lookup", arguments={"q": "x"}),
+        ],
+    )
+
+    payload = provider.build_payload(
+        model,
+        GenerateRequest(
+            messages=[
+                UserMessage(content="first"),
+                assistant,
+                ToolResultMessage(tool_call_id="call_1", tool_name="lookup", content=[TextBlock(text="ok")]),
+                UserMessage(content="next"),
+            ]
+        ),
+        RequestOptions(),
+    )
+
+    assert payload["input"][1]["type"] == "message"
+    assert payload["input"][2]["type"] == "reasoning"
+    assert payload["input"][3]["type"] == "function_call"
+    assert payload["input"][4]["type"] == "function_call_output"
+
+
 def test_openai_build_payload_requests_encrypted_reasoning_content() -> None:
     provider = OpenAIProvider()
     model = _openai_model()
