@@ -493,49 +493,20 @@ class GeminiProvider(BaseProviderAdapter):
         part_states: list[dict[str, Any] | None],
     ) -> list[StreamEvent]:
         emitted: list[StreamEvent] = []
-        for part_position, part in enumerate(parts):
+        for part in parts:
             if not isinstance(part, dict):
                 continue
             kind = self._part_kind(part)
             if kind is None:
                 continue
 
-            while len(part_states) <= part_position:
-                part_states.append(None)
-            state = part_states[part_position]
-
-            if state is not None and state["kind"] != kind:
-                emitted.extend(self._finalize_part_state(state, assembler=assembler))
+            state = self._current_open_part_state(part_states)
+            if state is None or not self._part_state_matches(model=model, part=part, kind=kind, state=state):
+                if state is not None:
+                    emitted.extend(self._finalize_part_state(state, assembler=assembler))
                 state = self._new_part_state(model=model, kind=kind, part=part, part_states=part_states)
-                part_states[part_position] = state
-                if kind == "text":
-                    emitted.append(assembler.text_start(state["content_index"]))
-                elif kind == "reasoning":
-                    emitted.append(assembler.reasoning_start(state["content_index"]))
-                else:
-                    emitted.append(
-                        assembler.tool_call_start(
-                            state["content_index"],
-                            tool_call_id=state["tool_call_id"],
-                            name=state["tool_name"],
-                        )
-                    )
-            elif state is None:
-                emitted.extend(self._finalize_parts_before(part_position, assembler=assembler, part_states=part_states))
-                state = self._new_part_state(model=model, kind=kind, part=part, part_states=part_states)
-                part_states[part_position] = state
-                if kind == "text":
-                    emitted.append(assembler.text_start(state["content_index"]))
-                elif kind == "reasoning":
-                    emitted.append(assembler.reasoning_start(state["content_index"]))
-                else:
-                    emitted.append(
-                        assembler.tool_call_start(
-                            state["content_index"],
-                            tool_call_id=state["tool_call_id"],
-                            name=state["tool_name"],
-                        )
-                    )
+                part_states.append(state)
+                emitted.extend(self._start_part_state(state, assembler=assembler))
 
             signature = part.get("thoughtSignature")
             if isinstance(signature, str) and signature:
@@ -565,7 +536,7 @@ class GeminiProvider(BaseProviderAdapter):
 
             text = str(part.get("text") or "")
             previous_text = state["buffer"]
-            delta = text[len(previous_text) :] if text.startswith(previous_text) else text
+            delta = text[len(previous_text) :] if text.startswith(previous_text) else ""
             if delta:
                 if kind == "text":
                     emitted.append(assembler.text_delta(state["content_index"], delta))
@@ -573,21 +544,6 @@ class GeminiProvider(BaseProviderAdapter):
                     emitted.append(assembler.reasoning_delta(state["content_index"], delta))
             state["buffer"] = text
 
-        return emitted
-
-    def _finalize_parts_before(
-        self,
-        part_position: int,
-        *,
-        assembler: ResponseAssembler,
-        part_states: list[dict[str, Any] | None],
-    ) -> list[StreamEvent]:
-        emitted: list[StreamEvent] = []
-        for index in range(part_position):
-            state = part_states[index]
-            if state is None or state["finalized"]:
-                continue
-            emitted.extend(self._finalize_part_state(state, assembler=assembler))
         return emitted
 
     def _finalize_open_parts(
@@ -602,6 +558,20 @@ class GeminiProvider(BaseProviderAdapter):
                 continue
             emitted.extend(self._finalize_part_state(state, assembler=assembler))
         return emitted
+
+    def _start_part_state(self, state: dict[str, Any], *, assembler: ResponseAssembler) -> list[StreamEvent]:
+        content_index = state["content_index"]
+        if state["kind"] == "text":
+            return [assembler.text_start(content_index)]
+        if state["kind"] == "reasoning":
+            return [assembler.reasoning_start(content_index)]
+        return [
+            assembler.tool_call_start(
+                content_index,
+                tool_call_id=state["tool_call_id"],
+                name=state["tool_name"],
+            )
+        ]
 
     def _finalize_part_state(self, state: dict[str, Any], *, assembler: ResponseAssembler) -> list[StreamEvent]:
         state["finalized"] = True
@@ -636,7 +606,8 @@ class GeminiProvider(BaseProviderAdapter):
             tool_name = str(function_call.get("name") or "tool")
             tool_call_id = function_call.get("id")
             tool_call_id = tool_call_id if isinstance(tool_call_id, str) else None
-            tool_call_id = self._normalize_tool_call_id(model, tool_call_id)
+            source_tool_call_id = self._normalize_tool_call_id(model, tool_call_id)
+            tool_call_id = source_tool_call_id
             existing_ids = {
                 state["tool_call_id"]
                 for state in part_states
@@ -648,10 +619,47 @@ class GeminiProvider(BaseProviderAdapter):
                 {
                     "tool_name": tool_name,
                     "tool_call_id": tool_call_id,
+                    "source_tool_call_id": source_tool_call_id,
                     "arguments": {},
                 }
             )
         return state
+
+    def _current_open_part_state(self, part_states: list[dict[str, Any] | None]) -> dict[str, Any] | None:
+        for state in reversed(part_states):
+            if state is None or state["finalized"]:
+                continue
+            return state
+        return None
+
+    def _part_state_matches(
+        self,
+        *,
+        model: ModelSpec,
+        part: dict[str, Any],
+        kind: str,
+        state: dict[str, Any],
+    ) -> bool:
+        if state["kind"] != kind:
+            return False
+
+        if kind == "tool_call":
+            function_call = part.get("functionCall") or {}
+            tool_name = str(function_call.get("name") or "tool")
+            tool_call_id = function_call.get("id")
+            normalized_tool_call_id = self._normalize_tool_call_id(
+                model,
+                tool_call_id if isinstance(tool_call_id, str) else None,
+            )
+            return tool_name == state.get("tool_name") and normalized_tool_call_id == state.get("source_tool_call_id")
+
+        text = str(part.get("text") or "")
+        buffer = str(state.get("buffer") or "")
+        if not buffer:
+            return True
+        if state["finalized"]:
+            return text == buffer
+        return text.startswith(buffer) or buffer.startswith(text)
 
     def _part_kind(self, part: dict[str, Any]) -> str | None:
         if isinstance(part.get("functionCall"), dict):

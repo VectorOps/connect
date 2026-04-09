@@ -674,6 +674,76 @@ async def test_gemini_stream_response_handles_text_then_tool_call_at_same_part_p
 
 
 @pytest.mark.asyncio
+async def test_gemini_stream_response_handles_reordered_text_and_reasoning_parts() -> None:
+    provider = GeminiProvider()
+    model = _gemini_model(model="gemini-3-pro-preview")
+    request = GenerateRequest(messages=[UserMessage(content="status")])
+    response = _FakeStreamResponse(
+        [
+            {
+                "responseId": "resp_reordered",
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {"thought": True, "text": "Think", "thoughtSignature": "c2ln"},
+                                {"text": "Ans"},
+                            ]
+                        },
+                        "finishReason": "STOP",
+                    }
+                ],
+            },
+            {
+                "responseId": "resp_reordered",
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {"text": "Answer"},
+                                {"thought": True, "text": "Thinking", "thoughtSignature": "c2ln"},
+                            ]
+                        },
+                        "finishReason": "STOP",
+                    }
+                ],
+            },
+        ]
+    )
+
+    events = [
+        event
+        async for event in provider.stream_response(
+            model=model,
+            request=request,
+            options=RequestOptions(),
+            http=_FakeHttpTransport(response),
+        )
+    ]
+
+    assert [event.type for event in events] == [
+        "response_start",
+        "reasoning_start",
+        "reasoning_delta",
+        "reasoning_end",
+        "text_start",
+        "text_delta",
+        "text_delta",
+        "text_end",
+        "reasoning_start",
+        "reasoning_delta",
+        "reasoning_end",
+        "response_end",
+    ]
+    assert events[-1].response.content[0].type == "reasoning"
+    assert events[-1].response.content[0].text == "Think"
+    assert events[-1].response.content[1].type == "text"
+    assert events[-1].response.content[1].text == "Answer"
+    assert events[-1].response.content[2].type == "reasoning"
+    assert events[-1].response.content[2].text == "Thinking"
+
+
+@pytest.mark.asyncio
 async def test_gemini_stream_response_accepts_array_payloads_from_live_api() -> None:
     provider = GeminiProvider()
     model = _gemini_model(model="gemini-2.5-flash")
