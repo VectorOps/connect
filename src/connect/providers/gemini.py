@@ -504,7 +504,23 @@ class GeminiProvider(BaseProviderAdapter):
                 part_states.append(None)
             state = part_states[part_position]
 
-            if state is None:
+            if state is not None and state["kind"] != kind:
+                emitted.extend(self._finalize_part_state(state, assembler=assembler))
+                state = self._new_part_state(model=model, kind=kind, part=part, part_states=part_states)
+                part_states[part_position] = state
+                if kind == "text":
+                    emitted.append(assembler.text_start(state["content_index"]))
+                elif kind == "reasoning":
+                    emitted.append(assembler.reasoning_start(state["content_index"]))
+                else:
+                    emitted.append(
+                        assembler.tool_call_start(
+                            state["content_index"],
+                            tool_call_id=state["tool_call_id"],
+                            name=state["tool_name"],
+                        )
+                    )
+            elif state is None:
                 emitted.extend(self._finalize_parts_before(part_position, assembler=assembler, part_states=part_states))
                 state = self._new_part_state(model=model, kind=kind, part=part, part_states=part_states)
                 part_states[part_position] = state

@@ -536,6 +536,144 @@ async def test_gemini_stream_response_normalizes_duplicate_tool_call_ids() -> No
 
 
 @pytest.mark.asyncio
+async def test_gemini_stream_response_handles_reasoning_then_text_at_same_part_position() -> None:
+    provider = GeminiProvider()
+    model = _gemini_model(model="gemini-3-pro-preview")
+    request = GenerateRequest(messages=[UserMessage(content="status")])
+    response = _FakeStreamResponse(
+        [
+            {
+                "responseId": "resp_transition",
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {
+                                    "thought": True,
+                                    "text": "Thinking",
+                                    "thoughtSignature": "c2ln",
+                                }
+                            ]
+                        },
+                        "finishReason": "STOP",
+                    }
+                ],
+            },
+            {
+                "responseId": "resp_transition",
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {
+                                    "text": "Answer",
+                                }
+                            ]
+                        },
+                        "finishReason": "STOP",
+                    }
+                ],
+            },
+        ]
+    )
+
+    events = [
+        event
+        async for event in provider.stream_response(
+            model=model,
+            request=request,
+            options=RequestOptions(),
+            http=_FakeHttpTransport(response),
+        )
+    ]
+
+    assert [event.type for event in events] == [
+        "response_start",
+        "reasoning_start",
+        "reasoning_delta",
+        "reasoning_end",
+        "text_start",
+        "text_delta",
+        "text_end",
+        "response_end",
+    ]
+    assert events[-1].response.content[0].type == "reasoning"
+    assert events[-1].response.content[0].text == "Thinking"
+    assert events[-1].response.content[0].signature == "c2ln"
+    assert events[-1].response.content[1].type == "text"
+    assert events[-1].response.content[1].text == "Answer"
+
+
+@pytest.mark.asyncio
+async def test_gemini_stream_response_handles_text_then_tool_call_at_same_part_position() -> None:
+    provider = GeminiProvider()
+    model = _gemini_model(model="gemini-3-pro-preview")
+    request = GenerateRequest(messages=[UserMessage(content="status")])
+    response = _FakeStreamResponse(
+        [
+            {
+                "responseId": "resp_transition_tool",
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {
+                                    "text": "Let me check",
+                                }
+                            ]
+                        },
+                        "finishReason": "STOP",
+                    }
+                ],
+            },
+            {
+                "responseId": "resp_transition_tool",
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {
+                                    "functionCall": {"id": "call_1", "name": "lookup", "args": {"id": "alpha"}},
+                                }
+                            ]
+                        },
+                        "finishReason": "STOP",
+                    }
+                ],
+            },
+        ]
+    )
+
+    events = [
+        event
+        async for event in provider.stream_response(
+            model=model,
+            request=request,
+            options=RequestOptions(),
+            http=_FakeHttpTransport(response),
+        )
+    ]
+
+    assert [event.type for event in events] == [
+        "response_start",
+        "text_start",
+        "text_delta",
+        "text_end",
+        "tool_call_start",
+        "tool_call_delta",
+        "tool_call_end",
+        "response_end",
+    ]
+    assert events[-1].response.content[0].type == "text"
+    assert events[-1].response.content[0].text == "Let me check"
+    assert events[-1].response.content[1].type == "tool_call"
+    assert events[-1].response.content[1].id == "call_1"
+    assert events[-1].response.content[1].name == "lookup"
+    assert events[-1].response.content[1].arguments == {"id": "alpha"}
+    assert events[-1].response.finish_reason == "tool_call"
+
+
+@pytest.mark.asyncio
 async def test_gemini_stream_response_accepts_array_payloads_from_live_api() -> None:
     provider = GeminiProvider()
     model = _gemini_model(model="gemini-2.5-flash")
