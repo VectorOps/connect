@@ -16,6 +16,7 @@ from connect import (
     ToolResultMessage,
     ToolSpec,
     UserMessage,
+    assistant_message_text,
 )
 from connect.auth_env import resolve_env_auth
 from tests.integration._live_test_utils import (
@@ -77,6 +78,38 @@ def _contains_any_color(text: str) -> bool:
 
 def _print_usage(label: str, response) -> None:
     print(f"{label} usage: {response.usage.model_dump()}")
+
+
+@pytest.mark.asyncio
+async def test_gemini_generate_live_low_token_fragmentation_probe() -> None:
+    _require_gemini_key()
+
+    prompt = (
+        "Write a detailed explanation of quicksort in Go with a complete code sample, "
+        "walk through the algorithm step by step, and end with three bullet points about pitfalls."
+    )
+
+    async with AsyncLLMClient() as client:
+        response = await client.generate(
+            "gemini/gemini-3-flash-preview",
+            GenerateRequest(
+                messages=[UserMessage(content=prompt)],
+                max_output_tokens=24,
+            ),
+            options=RequestOptions(auth=_gemini_auth()),
+        )
+
+    text_blocks = [block.text for block in response.content if block.type == "text"]
+    newline_joined = _text_from_response(response)
+    concatenated = assistant_message_text(response)
+
+    print(f"fragmentation probe finish_reason: {response.finish_reason}")
+    print(f"fragmentation probe text blocks: {text_blocks!r}")
+    print(f"fragmentation probe newline_joined: {newline_joined!r}")
+    print(f"fragmentation probe concatenated: {concatenated!r}")
+
+    assert response.finish_reason in {"length", "stop"}
+    assert concatenated
 
 
 @pytest.mark.asyncio
