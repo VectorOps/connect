@@ -36,12 +36,10 @@ class _FakeStreamResponse:
     async def __aexit__(self, exc_type, exc, tb) -> None:
         return None
 
-    async def iter_lines(self):
+    async def iter_bytes(self):
         for event in self._events:
-            yield f"data: {json.dumps(event)}"
-            yield ""
-        yield "data: [DONE]"
-        yield ""
+            yield f"data: {json.dumps(event)}\n\n".encode()
+        yield b"data: [DONE]\n\n"
 
 
 class _FakeHttpTransport:

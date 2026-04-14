@@ -73,7 +73,10 @@ class HttpStreamResponse:
         return await self._response.json()
 
     async def iter_bytes(self) -> AsyncIterator[bytes]:
-        async for chunk in self._response.content.iter_any():
+        while True:
+            chunk = await self._response.content.readany()
+            if chunk == b"":
+                break
             if chunk:
                 yield chunk
 

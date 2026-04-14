@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from connect.transport.sse import iter_sse_frames
+from connect.transport.sse import iter_sse_frames, iter_sse_response
 
 
 async def _collect(lines: list[str]):
@@ -52,3 +52,29 @@ async def test_iter_sse_frames_ignores_comments_and_empty_events() -> None:
     frames = await _collect([": comment", "", ": second comment"])
 
     assert frames == []
+
+
+class _ChunkedResponse:
+    def __init__(self, chunks: list[bytes]) -> None:
+        self._chunks = chunks
+
+    async def iter_bytes(self):
+        for chunk in self._chunks:
+            yield chunk
+
+
+@pytest.mark.asyncio
+async def test_iter_sse_response_parses_large_chunked_event_without_readline_limits() -> None:
+    large_data = "x" * 200_000
+    encoded = f"data: {large_data}\n\ndata: [DONE]\n\n".encode("utf-8")
+    response = _ChunkedResponse(
+        [encoded[:65536], encoded[65536:131072], encoded[131072:]]
+    )
+
+    frames = [frame async for frame in iter_sse_response(response)]
+
+    assert len(frames) == 2
+    assert frames[0].data == large_data
+    assert frames[0].is_done is False
+    assert frames[1].data == "[DONE]"
+    assert frames[1].is_done is True

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import codecs
 from collections.abc import AsyncIterable, AsyncIterator
 from dataclasses import dataclass
 
@@ -68,6 +69,30 @@ async def iter_sse_frames(lines: AsyncIterable[str]) -> AsyncIterator[SSEFrame]:
         )
 
 
+async def iter_sse_lines(chunks: AsyncIterable[bytes]) -> AsyncIterator[str]:
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    buffered = ""
+
+    async for chunk in chunks:
+        if not chunk:
+            continue
+
+        buffered += decoder.decode(chunk)
+
+        while True:
+            newline_index = buffered.find("\n")
+            if newline_index < 0:
+                break
+
+            line = buffered[:newline_index]
+            buffered = buffered[newline_index + 1 :]
+            yield line.rstrip("\r")
+
+    buffered += decoder.decode(b"", final=True)
+    if buffered:
+        yield buffered.rstrip("\r")
+
+
 async def iter_sse_response(response) -> AsyncIterator[SSEFrame]:
-    async for frame in iter_sse_frames(response.iter_lines()):
+    async for frame in iter_sse_frames(iter_sse_lines(response.iter_bytes())):
         yield frame

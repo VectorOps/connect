@@ -21,7 +21,7 @@ class _FakeStreamResponse:
     url = "https://api.openai.com/v1/responses"
 
     def __init__(self) -> None:
-        payload_lines: list[bytes] = []
+        payload_chunks: list[bytes] = []
         for event in (
             {"type": "response.created", "response": {"id": "resp_test"}},
             {"type": "response.content_part.added", "output_index": 0, "part": {"type": "output_text"}},
@@ -35,11 +35,9 @@ class _FakeStreamResponse:
                 },
             },
         ):
-            payload_lines.append(f"data: {json.dumps(event)}\n".encode())
-            payload_lines.append(b"\n")
-        payload_lines.append(b"data: [DONE]\n")
-        payload_lines.append(b"\n")
-        self.content = _FakeStreamContent(payload_lines)
+            payload_chunks.append(f"data: {json.dumps(event)}\n\n".encode())
+        payload_chunks.append(b"data: [DONE]\n\n")
+        self.content = _FakeStreamContent(payload_chunks)
 
     async def __aenter__(self) -> _FakeStreamResponse:
         return self
@@ -47,16 +45,27 @@ class _FakeStreamResponse:
     async def __aexit__(self, exc_type, exc, tb) -> None:
         return None
 
+    async def iter_bytes(self):
+        async for chunk in self.content.iter_bytes():
+            yield chunk
+
     def close(self) -> None:
         return None
 
 
 class _FakeStreamContent:
-    def __init__(self, lines: list[bytes]) -> None:
-        self._lines = iter(lines)
+    def __init__(self, chunks: list[bytes]) -> None:
+        self._chunks = iter(chunks)
 
-    async def readline(self) -> bytes:
-        return next(self._lines, b"")
+    async def readany(self) -> bytes:
+        return next(self._chunks, b"")
+
+    async def iter_bytes(self):
+        while True:
+            chunk = await self.readany()
+            if chunk == b"":
+                break
+            yield chunk
 
 
 class _FakeClientSession:
