@@ -162,6 +162,23 @@ def test_chatgpt_build_payload_includes_empty_instructions_when_missing() -> Non
     assert payload["store"] is False
 
 
+def test_chatgpt_build_payload_removes_excluded_parameters() -> None:
+    from connect.providers import ChatGPTProvider
+
+    provider = ChatGPTProvider()
+    model = _openai_model(
+        provider="chatgpt",
+        model="gpt-5.4-mini",
+        api_family="chatgpt-responses",
+        base_url="https://chatgpt.com/backend-api",
+    )
+    request = GenerateRequest(messages=[UserMessage(content="ping")], temperature=0.7)
+
+    payload = provider.build_payload(model, request, RequestOptions())
+
+    assert "temperature" not in payload
+
+
 def test_openai_build_payload_serializes_multimodal_history_and_controls() -> None:
     provider = OpenAIProvider()
     model = _openai_model()

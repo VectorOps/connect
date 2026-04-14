@@ -13,6 +13,10 @@ class ChatGPTProvider(OpenAIProvider):
     api_family = "chatgpt-responses"
     default_base_url = "https://chatgpt.com/backend-api"
     stream_path = "/codex/responses"
+    excluded_payload_parameters = {
+        "temperature",
+        "store",
+    }
 
     def _default_user_agent(self) -> str:
         return f"pi ({platform.system().lower()} {platform.release()}; {platform.machine().lower()})"
@@ -25,7 +29,9 @@ class ChatGPTProvider(OpenAIProvider):
     ) -> dict[str, str]:
         headers = super().build_headers(model, request, options)
         headers["OpenAI-Beta"] = "responses=experimental"
-        headers.setdefault("originator", str(options.provider_options.get("originator", "connect")))
+        headers.setdefault(
+            "originator", str(options.provider_options.get("originator", "connect"))
+        )
         headers.setdefault("User-Agent", self._default_user_agent())
 
         session_id = self._session_id(request, options)
@@ -50,6 +56,9 @@ class ChatGPTProvider(OpenAIProvider):
             }
         )
         payload = super().build_payload(payload_model, request, options)
+
+        for parameter_name in self.excluded_payload_parameters:
+            payload.pop(parameter_name, None)
 
         if request.system_prompt:
             payload["instructions"] = request.system_prompt
@@ -84,16 +93,24 @@ class ChatGPTProvider(OpenAIProvider):
 
         return payload
 
-    def _session_id(self, request: GenerateRequest, options: RequestOptions) -> str | None:
+    def _session_id(
+        self, request: GenerateRequest, options: RequestOptions
+    ) -> str | None:
         session_id = options.provider_options.get("session_id")
         if isinstance(session_id, str) and session_id:
             return session_id
-        if request.session and isinstance(request.session.session_id, str) and request.session.session_id:
+        if (
+            request.session
+            and isinstance(request.session.session_id, str)
+            and request.session.session_id
+        ):
             return request.session.session_id
         return None
 
     def _resolve_account_id(self, options: RequestOptions) -> str | None:
-        existing = options.headers.get("chatgpt-account-id") or options.headers.get("ChatGPT-Account-Id")
+        existing = options.headers.get("chatgpt-account-id") or options.headers.get(
+            "ChatGPT-Account-Id"
+        )
         if isinstance(existing, str) and existing:
             return existing
 
@@ -101,7 +118,9 @@ class ChatGPTProvider(OpenAIProvider):
         if isinstance(auth, ChatGPTAccessTokenAuth) and auth.account_id:
             return auth.account_id
 
-        authorization = options.headers.get("Authorization") or options.headers.get("authorization")
+        authorization = options.headers.get("Authorization") or options.headers.get(
+            "authorization"
+        )
         if not isinstance(authorization, str):
             return None
         prefix = "Bearer "
