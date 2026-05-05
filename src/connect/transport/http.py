@@ -41,8 +41,18 @@ class HttpStatusError(Exception):
 
 
 class HttpStreamResponse:
-    def __init__(self, response: aiohttp.ClientResponse):
+    def __init__(
+        self,
+        response: aiohttp.ClientResponse,
+        *,
+        exception_mapper,
+        provider: str | None,
+        api_family: str | None,
+    ):
         self._response = response
+        self._exception_mapper = exception_mapper
+        self._provider = provider
+        self._api_family = api_family
 
     @property
     def status_code(self) -> int:
@@ -64,28 +74,43 @@ class HttpStreamResponse:
         return None
 
     async def read(self) -> bytes:
-        return await self._response.read()
+        try:
+            return await self._response.read()
+        except Exception as exc:
+            raise self._map_exception(exc) from exc
 
     async def text(self) -> str:
-        return await self._response.text()
+        try:
+            return await self._response.text()
+        except Exception as exc:
+            raise self._map_exception(exc) from exc
 
     async def json(self) -> Any:
-        return await self._response.json()
+        try:
+            return await self._response.json()
+        except Exception as exc:
+            raise self._map_exception(exc) from exc
 
     async def iter_bytes(self) -> AsyncIterator[bytes]:
-        while True:
-            chunk = await self._response.content.readany()
-            if chunk == b"":
-                break
-            if chunk:
-                yield chunk
+        try:
+            while True:
+                chunk = await self._response.content.readany()
+                if chunk == b"":
+                    break
+                if chunk:
+                    yield chunk
+        except Exception as exc:
+            raise self._map_exception(exc) from exc
 
     async def iter_lines(self) -> AsyncIterator[str]:
-        while True:
-            line = await self._response.content.readline()
-            if line == b"":
-                break
-            yield line.decode("utf-8", errors="replace").rstrip("\r\n")
+        try:
+            while True:
+                line = await self._response.content.readline()
+                if line == b"":
+                    break
+                yield line.decode("utf-8", errors="replace").rstrip("\r\n")
+        except Exception as exc:
+            raise self._map_exception(exc) from exc
 
     async def close(self) -> None:
         self._response.close()
@@ -95,6 +120,9 @@ class HttpStreamResponse:
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
         await self.close()
+
+    def _map_exception(self, exc: Exception):
+        return self._exception_mapper(exc, provider=self._provider, api_family=self._api_family)
 
 
 class HttpTransport:
@@ -207,7 +235,12 @@ class HttpTransport:
             except Exception:
                 response.close()
                 raise
-            return HttpStreamResponse(response)
+            return HttpStreamResponse(
+                response,
+                exception_mapper=self._map_transport_exception,
+                provider=provider,
+                api_family=api_family,
+            )
         except Exception as exc:
             raise self._map_transport_exception(exc, provider=provider, api_family=api_family) from exc
 
