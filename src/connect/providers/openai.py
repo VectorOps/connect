@@ -5,7 +5,12 @@ import json
 from collections.abc import AsyncIterator
 from typing import Any
 
-from ..exceptions import ConnectError, PermanentProviderError, ProviderProtocolError, make_error_info
+from ..exceptions import (
+    ConnectError,
+    PermanentProviderError,
+    ProviderProtocolError,
+    make_error_info,
+)
 from ..transport.http import HttpStatusError
 from ..transport.assembly import ResponseAssembler
 from ..transport.sse import iter_sse_response
@@ -51,8 +56,14 @@ class OpenAIProvider(BaseProviderAdapter):
 
         raw_input_tokens = int(payload.get("input_tokens") or 0)
         output_tokens = int(payload.get("output_tokens") or 0)
-        reasoning_tokens = int(output_details.get("reasoning_tokens") or payload.get("reasoning_tokens") or 0)
-        cache_read_tokens = int(input_details.get("cached_tokens") or payload.get("cache_read_tokens") or 0)
+        reasoning_tokens = int(
+            output_details.get("reasoning_tokens")
+            or payload.get("reasoning_tokens")
+            or 0
+        )
+        cache_read_tokens = int(
+            input_details.get("cached_tokens") or payload.get("cache_read_tokens") or 0
+        )
         cache_write_tokens = int(
             input_details.get("cache_write_tokens")
             or input_details.get("cache_creation_tokens")
@@ -90,7 +101,9 @@ class OpenAIProvider(BaseProviderAdapter):
 
         default_headers = model.protocol_defaults.get("headers")
         if isinstance(default_headers, dict):
-            headers.update({str(key): str(value) for key, value in default_headers.items()})
+            headers.update(
+                {str(key): str(value) for key, value in default_headers.items()}
+            )
         return headers
 
     def build_error(
@@ -132,7 +145,9 @@ class OpenAIProvider(BaseProviderAdapter):
             "input": self._build_input(model, request),
         }
 
-        if request.system_prompt and model.capabilities.get("supports_developer_role", True):
+        if request.system_prompt and model.capabilities.get(
+            "supports_developer_role", True
+        ):
             payload["instructions"] = request.system_prompt
 
         if request.temperature is not None:
@@ -191,7 +206,11 @@ class OpenAIProvider(BaseProviderAdapter):
             if option_name in options.provider_options:
                 payload[option_name] = options.provider_options[option_name]
 
-        if request.session and request.session.continue_from and "previous_response_id" not in payload:
+        if (
+            request.session
+            and request.session.continue_from
+            and "previous_response_id" not in payload
+        ):
             payload["previous_response_id"] = request.session.continue_from
 
         protocol_defaults = model.protocol_defaults
@@ -245,6 +264,7 @@ class OpenAIProvider(BaseProviderAdapter):
                 headers={**headers, **options.headers},
                 json_body=payload,
                 timeout=options.timeout,
+                stream_read_timeout=options.stream_read_timeout,
                 expected_status=200,
             )
         except HttpStatusError as exc:
@@ -295,7 +315,10 @@ class OpenAIProvider(BaseProviderAdapter):
 
                 for emitted_event in emitted_events:
                     yield emitted_event
-                    if isinstance(emitted_event, ResponseEndEvent) or emitted_event.type == "error":
+                    if (
+                        isinstance(emitted_event, ResponseEndEvent)
+                        or emitted_event.type == "error"
+                    ):
                         return
 
                 if terminal:
@@ -303,9 +326,13 @@ class OpenAIProvider(BaseProviderAdapter):
 
         yield assembler.response_end(finish_reason="unknown")
 
-    def _build_input(self, model: ModelSpec, request: GenerateRequest) -> list[dict[str, Any]]:
+    def _build_input(
+        self, model: ModelSpec, request: GenerateRequest
+    ) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
-        if request.system_prompt and not model.capabilities.get("supports_developer_role", True):
+        if request.system_prompt and not model.capabilities.get(
+            "supports_developer_role", True
+        ):
             items.append(
                 {
                     "role": "system",
@@ -321,13 +348,17 @@ class OpenAIProvider(BaseProviderAdapter):
                 items.append(serialized)
         return items
 
-    def _serialize_message(self, message: Message) -> dict[str, Any] | list[dict[str, Any]]:
+    def _serialize_message(
+        self, message: Message
+    ) -> dict[str, Any] | list[dict[str, Any]]:
         if isinstance(message, UserMessage):
             content = message.content
             if isinstance(content, str):
                 content_items = [{"type": "input_text", "text": content}]
             else:
-                content_items = [self._serialize_input_block(block) for block in content]
+                content_items = [
+                    self._serialize_input_block(block) for block in content
+                ]
             return {"role": "user", "content": content_items}
 
         if isinstance(message, AssistantMessage):
@@ -339,16 +370,23 @@ class OpenAIProvider(BaseProviderAdapter):
                         "type": "message",
                         "role": "assistant",
                         "status": "completed",
-                        "content": [self._serialize_assistant_block(block) for block in text_blocks],
+                        "content": [
+                            self._serialize_assistant_block(block)
+                            for block in text_blocks
+                        ],
                     }
                 )
 
             for block_index, block in enumerate(message.content):
                 if block.type == "reasoning":
-                    reasoning_item = self._serialize_assistant_block(block, block_index=block_index)
+                    reasoning_item = self._serialize_assistant_block(
+                        block, block_index=block_index
+                    )
                     output_items.append(reasoning_item)
                 elif block.type == "tool_call":
-                    output_items.append(self._serialize_assistant_block(block, block_index=block_index))
+                    output_items.append(
+                        self._serialize_assistant_block(block, block_index=block_index)
+                    )
 
             return output_items
 
@@ -356,7 +394,9 @@ class OpenAIProvider(BaseProviderAdapter):
             output_item = {
                 "type": "function_call_output",
                 "call_id": message.tool_call_id,
-                "output": [self._serialize_input_block(block) for block in message.content],
+                "output": [
+                    self._serialize_input_block(block) for block in message.content
+                ],
             }
             if isinstance(output_item["output"], list) and not output_item["output"]:
                 output_item["output"] = ""
@@ -375,7 +415,9 @@ class OpenAIProvider(BaseProviderAdapter):
             }
         raise TypeError(f"Unsupported input block type: {block.type!r}")
 
-    def _serialize_assistant_block(self, block, *, block_index: int | None = None) -> dict[str, Any]:
+    def _serialize_assistant_block(
+        self, block, *, block_index: int | None = None
+    ) -> dict[str, Any]:
         if block.type == "text":
             return {"type": "output_text", "text": block.text}
         if block.type == "reasoning":
@@ -388,7 +430,11 @@ class OpenAIProvider(BaseProviderAdapter):
                 payload["content"] = [{"type": "reasoning_text", "text": block.text}]
             encrypted_content = block.protocol_meta.get("openai_encrypted_content")
             if not isinstance(encrypted_content, str) or not encrypted_content:
-                if block.redacted and isinstance(block.signature, str) and block.signature:
+                if (
+                    block.redacted
+                    and isinstance(block.signature, str)
+                    and block.signature
+                ):
                     encrypted_content = block.signature
             if isinstance(encrypted_content, str) and encrypted_content:
                 payload["encrypted_content"] = encrypted_content
@@ -437,8 +483,18 @@ class OpenAIProvider(BaseProviderAdapter):
             elif key == "items":
                 normalized[key] = self._force_strict_object_schema(value)
             elif key in {"anyOf", "oneOf", "allOf"} and isinstance(value, list):
-                normalized[key] = [self._force_strict_object_schema(item) for item in value]
-            elif key in {"additionalProperties", "not", "if", "then", "else", "contains", "propertyNames"} and isinstance(value, dict):
+                normalized[key] = [
+                    self._force_strict_object_schema(item) for item in value
+                ]
+            elif key in {
+                "additionalProperties",
+                "not",
+                "if",
+                "then",
+                "else",
+                "contains",
+                "propertyNames",
+            } and isinstance(value, dict):
                 normalized[key] = self._force_strict_object_schema(value)
             else:
                 normalized[key] = copy.deepcopy(value)
@@ -460,7 +516,9 @@ class OpenAIProvider(BaseProviderAdapter):
 
         return normalized
 
-    def _build_reasoning_payload(self, model: ModelSpec, request: GenerateRequest) -> dict[str, Any] | None:
+    def _build_reasoning_payload(
+        self, model: ModelSpec, request: GenerateRequest
+    ) -> dict[str, Any] | None:
         reasoning = request.reasoning
         if reasoning is None:
             return None
@@ -496,7 +554,9 @@ class OpenAIProvider(BaseProviderAdapter):
             }
         }
 
-    def _build_include(self, request: GenerateRequest, options: RequestOptions) -> list[str] | None:
+    def _build_include(
+        self, request: GenerateRequest, options: RequestOptions
+    ) -> list[str] | None:
         include = options.provider_options.get("include")
         values: list[str] = []
 
@@ -505,7 +565,10 @@ class OpenAIProvider(BaseProviderAdapter):
         elif isinstance(include, (list, tuple, set)):
             values.extend(str(value) for value in include if str(value))
 
-        if request.reasoning is not None and "reasoning.encrypted_content" not in values:
+        if (
+            request.reasoning is not None
+            and "reasoning.encrypted_content" not in values
+        ):
             values.append("reasoning.encrypted_content")
 
         return values or None
@@ -529,7 +592,9 @@ class OpenAIProvider(BaseProviderAdapter):
             return [assembler.error(self.build_error(event))], True
 
         if event_type == "response.failed":
-            error_payload = event.get("response", {}).get("error") or event.get("error") or event
+            error_payload = (
+                event.get("response", {}).get("error") or event.get("error") or event
+            )
             return [assembler.error(self.build_error(error_payload))], True
 
         if event_type in {"response.created", "response.in_progress"}:
@@ -541,7 +606,9 @@ class OpenAIProvider(BaseProviderAdapter):
             response_status = response.get("status")
             if isinstance(response_status, str) and response_status:
                 assembler.update_protocol_state(openai_response_status=response_status)
-            usage_event = self._maybe_usage_event(response.get("usage"), assembler=assembler, completeness="partial")
+            usage_event = self._maybe_usage_event(
+                response.get("usage"), assembler=assembler, completeness="partial"
+            )
             if usage_event is not None:
                 emitted.append(usage_event)
             return emitted, False
@@ -584,7 +651,9 @@ class OpenAIProvider(BaseProviderAdapter):
                 emitted.append(
                     assembler.tool_call_start(
                         index,
-                        tool_call_id=str(item.get("call_id") or item.get("id") or f"call_{index}"),
+                        tool_call_id=str(
+                            item.get("call_id") or item.get("id") or f"call_{index}"
+                        ),
                         name=str(item.get("name") or "tool"),
                     )
                 )
@@ -609,10 +678,22 @@ class OpenAIProvider(BaseProviderAdapter):
             index = self._event_index(event)
             part = event.get("part") or {}
             part_type = part.get("type")
-            if part_type in {"output_text", "text", "refusal"} and index not in started_text:
+            if (
+                part_type in {"output_text", "text", "refusal"}
+                and index not in started_text
+            ):
                 started_text.add(index)
                 emitted.append(assembler.text_start(index))
-            elif part_type in {"reasoning", "reasoning_text", "reasoning_summary_text", "summary_text"} and index not in started_reasoning:
+            elif (
+                part_type
+                in {
+                    "reasoning",
+                    "reasoning_text",
+                    "reasoning_summary_text",
+                    "summary_text",
+                }
+                and index not in started_reasoning
+            ):
                 started_reasoning.add(index)
                 emitted.append(assembler.reasoning_start(index))
             protocol_meta = {}
@@ -627,10 +708,30 @@ class OpenAIProvider(BaseProviderAdapter):
             index = self._event_index(event)
             part = event.get("part") or {}
             part_type = part.get("type")
-            if part_type in {"output_text", "text", "refusal"} and index not in ended_text:
+            if (
+                part_type in {"output_text", "text", "refusal"}
+                and index not in ended_text
+            ):
                 final_text = str(part.get("text") or part.get("refusal") or "")
-                emitted.extend(self._finalize_text_event(assembler, index=index, started_text=started_text, ended_text=ended_text, final_text=final_text))
-            elif part_type in {"reasoning", "reasoning_text", "reasoning_summary_text", "summary_text"} and index not in ended_reasoning:
+                emitted.extend(
+                    self._finalize_text_event(
+                        assembler,
+                        index=index,
+                        started_text=started_text,
+                        ended_text=ended_text,
+                        final_text=final_text,
+                    )
+                )
+            elif (
+                part_type
+                in {
+                    "reasoning",
+                    "reasoning_text",
+                    "reasoning_summary_text",
+                    "summary_text",
+                }
+                and index not in ended_reasoning
+            ):
                 final_text = str(part.get("text") or "")
                 emitted.extend(
                     self._finalize_reasoning_event(
@@ -688,12 +789,17 @@ class OpenAIProvider(BaseProviderAdapter):
             )
             return emitted, False
 
-        if event_type in {"response.reasoning_text.delta", "response.reasoning_summary_text.delta"}:
+        if event_type in {
+            "response.reasoning_text.delta",
+            "response.reasoning_summary_text.delta",
+        }:
             index = self._event_index(event)
             if index not in started_reasoning:
                 started_reasoning.add(index)
                 emitted.append(assembler.reasoning_start(index))
-            emitted.append(assembler.reasoning_delta(index, str(event.get("delta") or "")))
+            emitted.append(
+                assembler.reasoning_delta(index, str(event.get("delta") or ""))
+            )
             return emitted, False
 
         if event_type == "response.reasoning_summary_part.done":
@@ -707,7 +813,10 @@ class OpenAIProvider(BaseProviderAdapter):
                 emitted.append(assembler.reasoning_delta(index, "\n\n"))
             return emitted, False
 
-        if event_type in {"response.reasoning_text.done", "response.reasoning_summary_text.done"}:
+        if event_type in {
+            "response.reasoning_text.done",
+            "response.reasoning_summary_text.done",
+        }:
             index = self._event_index(event)
             emitted.extend(
                 self._finalize_reasoning_event(
@@ -725,19 +834,33 @@ class OpenAIProvider(BaseProviderAdapter):
         if event_type == "response.function_call_arguments.delta":
             index = self._event_index(event)
             if index not in started_tool_calls:
-                item_metadata = tool_call_metadata.get(str(event.get("item_id") or ""), {})
+                item_metadata = tool_call_metadata.get(
+                    str(event.get("item_id") or ""), {}
+                )
                 started_tool_calls.add(index)
                 emitted.append(
                     assembler.tool_call_start(
                         index,
-                        tool_call_id=str(item_metadata.get("id") or event.get("call_id") or event.get("item_id") or f"call_{index}"),
-                        name=str(item_metadata.get("name") or event.get("name") or "tool"),
+                        tool_call_id=str(
+                            item_metadata.get("id")
+                            or event.get("call_id")
+                            or event.get("item_id")
+                            or f"call_{index}"
+                        ),
+                        name=str(
+                            item_metadata.get("name") or event.get("name") or "tool"
+                        ),
                     )
                 )
-            emitted.append(assembler.tool_call_delta(index, str(event.get("delta") or "")))
+            emitted.append(
+                assembler.tool_call_delta(index, str(event.get("delta") or ""))
+            )
             return emitted, False
 
-        if event_type in {"response.function_call_arguments.done", "response.output_item.done"}:
+        if event_type in {
+            "response.function_call_arguments.done",
+            "response.output_item.done",
+        }:
             item = event.get("item") or {}
             item_type = item.get("type")
 
@@ -745,11 +868,15 @@ class OpenAIProvider(BaseProviderAdapter):
                 index = self._event_index(event)
                 summary = item.get("summary") or []
                 summary_text = "\n\n".join(
-                    str(part.get("text") or "") for part in summary if isinstance(part, dict)
+                    str(part.get("text") or "")
+                    for part in summary
+                    if isinstance(part, dict)
                 )
                 content = item.get("content") or []
                 content_text = "".join(
-                    str(part.get("text") or "") for part in content if isinstance(part, dict)
+                    str(part.get("text") or "")
+                    for part in content
+                    if isinstance(part, dict)
                 )
                 final_text = content_text or summary_text
                 emitted.extend(
@@ -759,7 +886,8 @@ class OpenAIProvider(BaseProviderAdapter):
                         started_reasoning=started_reasoning,
                         ended_reasoning=ended_reasoning,
                         final_text=final_text,
-                        signature=item.get("encrypted_content") or item.get("signature"),
+                        signature=item.get("encrypted_content")
+                        or item.get("signature"),
                         redacted=item.get("encrypted_content") is not None,
                     )
                 )
@@ -802,14 +930,22 @@ class OpenAIProvider(BaseProviderAdapter):
                     assembler.update_block_metadata(index, protocol_meta=protocol_meta)
                 return emitted, False
 
-            if event_type == "response.output_item.done" and item_type not in {None, "function_call"}:
+            if event_type == "response.output_item.done" and item_type not in {
+                None,
+                "function_call",
+            }:
                 return emitted, False
 
             index = self._event_index(event)
             item_id = str(event.get("item_id") or item.get("id") or "")
             if item_id:
                 tool_call_metadata[item_id] = {
-                    "id": str(event.get("call_id") or item.get("call_id") or item.get("id") or f"call_{index}"),
+                    "id": str(
+                        event.get("call_id")
+                        or item.get("call_id")
+                        or item.get("id")
+                        or f"call_{index}"
+                    ),
                     "name": str(event.get("name") or item.get("name") or "tool"),
                 }
             item_metadata = tool_call_metadata.get(item_id, {})
@@ -818,8 +954,19 @@ class OpenAIProvider(BaseProviderAdapter):
                 emitted.append(
                     assembler.tool_call_start(
                         index,
-                        tool_call_id=str(item_metadata.get("id") or event.get("call_id") or item.get("call_id") or item.get("id") or f"call_{index}"),
-                        name=str(item_metadata.get("name") or event.get("name") or item.get("name") or "tool"),
+                        tool_call_id=str(
+                            item_metadata.get("id")
+                            or event.get("call_id")
+                            or item.get("call_id")
+                            or item.get("id")
+                            or f"call_{index}"
+                        ),
+                        name=str(
+                            item_metadata.get("name")
+                            or event.get("name")
+                            or item.get("name")
+                            or "tool"
+                        ),
                     )
                 )
                 protocol_meta = {}
@@ -831,14 +978,18 @@ class OpenAIProvider(BaseProviderAdapter):
             arguments = event.get("arguments") or item.get("arguments")
             if isinstance(arguments, str) and arguments:
                 try:
-                    parsed_arguments = self.parse_tool_call_arguments(arguments, index=index)
+                    parsed_arguments = self.parse_tool_call_arguments(
+                        arguments, index=index
+                    )
                 except ProviderProtocolError:
                     emitted.append(assembler.tool_call_delta(index, arguments))
                     parsed_arguments = self.parse_tool_call_arguments(
                         assembler.take_tool_call_buffer(index),
                         index=index,
                     )
-                emitted.append(assembler.tool_call_end(index, arguments=parsed_arguments))
+                emitted.append(
+                    assembler.tool_call_end(index, arguments=parsed_arguments)
+                )
                 protocol_meta = {}
                 if item_id:
                     protocol_meta["openai_item_id"] = item_id
@@ -878,12 +1029,16 @@ class OpenAIProvider(BaseProviderAdapter):
                 assembler.response_id = response_id
                 assembler.update_protocol_state(previous_response_id=response_id)
 
-            usage_event = self._maybe_usage_event(response.get("usage"), assembler=assembler, completeness="final")
+            usage_event = self._maybe_usage_event(
+                response.get("usage"), assembler=assembler, completeness="final"
+            )
             if usage_event is not None:
                 emitted.append(usage_event)
 
             incomplete_reason = (response.get("incomplete_details") or {}).get("reason")
-            finish_reason = self.normalize_finish_reason(incomplete_reason or response.get("status") or event.get("reason"))
+            finish_reason = self.normalize_finish_reason(
+                incomplete_reason or response.get("status") or event.get("reason")
+            )
             if assembler.has_tool_calls() and finish_reason == "stop":
                 finish_reason = "tool_call"
             emitted.append(assembler.response_end(finish_reason=finish_reason))
@@ -896,7 +1051,9 @@ class OpenAIProvider(BaseProviderAdapter):
                 assembler.response_id = response_id
                 assembler.update_protocol_state(previous_response_id=response_id)
 
-            usage_event = self._maybe_usage_event(response.get("usage"), assembler=assembler, completeness="final")
+            usage_event = self._maybe_usage_event(
+                response.get("usage"), assembler=assembler, completeness="final"
+            )
             if usage_event is not None:
                 emitted.append(usage_event)
 
@@ -910,12 +1067,16 @@ class OpenAIProvider(BaseProviderAdapter):
                 assembler.response_id = response_id
                 assembler.update_protocol_state(previous_response_id=response_id)
 
-            usage_event = self._maybe_usage_event(response.get("usage"), assembler=assembler, completeness="final")
+            usage_event = self._maybe_usage_event(
+                response.get("usage"), assembler=assembler, completeness="final"
+            )
             if usage_event is not None:
                 emitted.append(usage_event)
 
             finish_reason = self.normalize_finish_reason(
-                response.get("finish_reason") or response.get("status") or event.get("reason")
+                response.get("finish_reason")
+                or response.get("status")
+                or event.get("reason")
             )
             if assembler.has_tool_calls() and finish_reason == "stop":
                 finish_reason = "tool_call"

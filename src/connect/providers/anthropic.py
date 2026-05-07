@@ -53,7 +53,9 @@ class AnthropicProvider(BaseProviderAdapter):
 
         default_headers = model.protocol_defaults.get("headers")
         if isinstance(default_headers, dict):
-            headers.update({str(key): str(value) for key, value in default_headers.items()})
+            headers.update(
+                {str(key): str(value) for key, value in default_headers.items()}
+            )
         return headers
 
     def build_usage(
@@ -69,7 +71,9 @@ class AnthropicProvider(BaseProviderAdapter):
         output_tokens = int(payload.get("output_tokens") or 0)
         cache_read_tokens = int(payload.get("cache_read_input_tokens") or 0)
         cache_write_tokens = int(payload.get("cache_creation_input_tokens") or 0)
-        total_tokens = input_tokens + output_tokens + cache_read_tokens + cache_write_tokens
+        total_tokens = (
+            input_tokens + output_tokens + cache_read_tokens + cache_write_tokens
+        )
 
         return Usage(
             input_tokens=input_tokens,
@@ -196,6 +200,7 @@ class AnthropicProvider(BaseProviderAdapter):
                 headers={**headers, **options.headers},
                 json_body=payload,
                 timeout=options.timeout,
+                stream_read_timeout=options.stream_read_timeout,
                 expected_status=200,
             )
         except HttpStatusError as exc:
@@ -242,7 +247,9 @@ class AnthropicProvider(BaseProviderAdapter):
                     response_id = message.get("id")
                     if isinstance(response_id, str) and response_id:
                         assembler.response_id = response_id
-                        assembler.update_protocol_state(anthropic_response_id=response_id)
+                        assembler.update_protocol_state(
+                            anthropic_response_id=response_id
+                        )
                     message_usage = message.get("usage")
                     if isinstance(message_usage, dict):
                         usage_payload.update(message_usage)
@@ -288,9 +295,13 @@ class AnthropicProvider(BaseProviderAdapter):
                         continue
 
                     if block_type == "tool_use":
-                        tool_call_id = self._normalize_tool_call_id(model, block.get("id"))
+                        tool_call_id = self._normalize_tool_call_id(
+                            model, block.get("id")
+                        )
                         tool_name = str(block.get("name") or "tool")
-                        yield assembler.tool_call_start(index, tool_call_id=tool_call_id, name=tool_name)
+                        yield assembler.tool_call_start(
+                            index, tool_call_id=tool_call_id, name=tool_name
+                        )
                         input_payload = block.get("input")
                         if isinstance(input_payload, dict):
                             tool_call_initial_arguments[index] = input_payload
@@ -306,18 +317,24 @@ class AnthropicProvider(BaseProviderAdapter):
                         continue
 
                     if delta_type == "thinking_delta":
-                        yield assembler.reasoning_delta(index, str(delta.get("thinking") or ""))
+                        yield assembler.reasoning_delta(
+                            index, str(delta.get("thinking") or "")
+                        )
                         continue
 
                     if delta_type == "signature_delta":
                         signature = str(delta.get("signature") or "")
                         if signature:
-                            reasoning_signatures[index] = f"{reasoning_signatures.get(index, '')}{signature}"
+                            reasoning_signatures[index] = (
+                                f"{reasoning_signatures.get(index, '')}{signature}"
+                            )
                         continue
 
                     if delta_type == "input_json_delta":
                         tool_call_streamed_arguments.add(index)
-                        yield assembler.tool_call_delta(index, str(delta.get("partial_json") or ""))
+                        yield assembler.tool_call_delta(
+                            index, str(delta.get("partial_json") or "")
+                        )
                         continue
 
                 if event_type == "content_block_stop":
@@ -358,7 +375,9 @@ class AnthropicProvider(BaseProviderAdapter):
                             else:
                                 yield assembler.tool_call_end(
                                     index,
-                                    arguments=tool_call_initial_arguments.get(index, {}),
+                                    arguments=tool_call_initial_arguments.get(
+                                        index, {}
+                                    ),
                                 )
                         except ProviderProtocolError as exc:
                             yield assembler.error(exc.error)
@@ -367,7 +386,9 @@ class AnthropicProvider(BaseProviderAdapter):
 
                 if event_type == "message_delta":
                     delta = event.get("delta") or {}
-                    next_finish_reason = self.normalize_finish_reason(delta.get("stop_reason"))
+                    next_finish_reason = self.normalize_finish_reason(
+                        delta.get("stop_reason")
+                    )
                     if next_finish_reason != "unknown":
                         finish_reason = next_finish_reason
                     message_usage = event.get("usage")
@@ -402,7 +423,9 @@ class AnthropicProvider(BaseProviderAdapter):
             return "content_filter"
         return super().normalize_finish_reason(normalized or value)
 
-    def _build_messages(self, model: ModelSpec, request: GenerateRequest, options: RequestOptions) -> list[dict[str, Any]]:
+    def _build_messages(
+        self, model: ModelSpec, request: GenerateRequest, options: RequestOptions
+    ) -> list[dict[str, Any]]:
         messages: list[dict[str, Any]] = []
         index = 0
         while index < len(request.messages):
@@ -410,13 +433,19 @@ class AnthropicProvider(BaseProviderAdapter):
 
             if isinstance(message, ToolResultMessage):
                 tool_results: list[dict[str, Any]] = []
-                while index < len(request.messages) and isinstance(request.messages[index], ToolResultMessage):
+                while index < len(request.messages) and isinstance(
+                    request.messages[index], ToolResultMessage
+                ):
                     current = request.messages[index]
                     tool_results.append(
                         {
                             "type": "tool_result",
-                            "tool_use_id": self._normalize_tool_call_id(model, current.tool_call_id),
-                            "content": self._serialize_tool_result_content(current.content),
+                            "tool_use_id": self._normalize_tool_call_id(
+                                model, current.tool_call_id
+                            ),
+                            "content": self._serialize_tool_result_content(
+                                current.content
+                            ),
                             "is_error": current.is_error,
                         }
                     )
@@ -433,7 +462,9 @@ class AnthropicProvider(BaseProviderAdapter):
 
         return messages
 
-    def _serialize_message(self, model: ModelSpec, message: Message) -> dict[str, Any] | None:
+    def _serialize_message(
+        self, model: ModelSpec, message: Message
+    ) -> dict[str, Any] | None:
         if isinstance(message, UserMessage):
             content = message.content
             if isinstance(content, str):
@@ -441,7 +472,11 @@ class AnthropicProvider(BaseProviderAdapter):
                 if not value:
                     return None
                 return {"role": "user", "content": value}
-            blocks = [self._serialize_user_block(block) for block in content if not self._is_empty_text_block(block)]
+            blocks = [
+                self._serialize_user_block(block)
+                for block in content
+                if not self._is_empty_text_block(block)
+            ]
             if not blocks:
                 return None
             return {"role": "user", "content": blocks}
@@ -457,8 +492,14 @@ class AnthropicProvider(BaseProviderAdapter):
 
                 if block.type == "reasoning":
                     replay_signature = self._resolve_replay_signature(model, block)
-                    if block.redacted and isinstance(block.signature, str) and block.signature:
-                        blocks.append({"type": "redacted_thinking", "data": block.signature})
+                    if (
+                        block.redacted
+                        and isinstance(block.signature, str)
+                        and block.signature
+                    ):
+                        blocks.append(
+                            {"type": "redacted_thinking", "data": block.signature}
+                        )
                         continue
                     if replay_signature is not None:
                         blocks.append(
@@ -503,20 +544,26 @@ class AnthropicProvider(BaseProviderAdapter):
             }
         raise TypeError(f"Unsupported Anthropic block type: {block.type!r}")
 
-    def _serialize_tool_result_content(self, blocks: list[Any]) -> str | list[dict[str, Any]]:
+    def _serialize_tool_result_content(
+        self, blocks: list[Any]
+    ) -> str | list[dict[str, Any]]:
         text_blocks = [block for block in blocks if block.type == "text" and block.text]
         image_blocks = [block for block in blocks if isinstance(block, ImageBlock)]
 
         if not image_blocks:
             return "\n".join(block.text for block in text_blocks)
 
-        content: list[dict[str, Any]] = [{"type": "text", "text": block.text} for block in text_blocks]
+        content: list[dict[str, Any]] = [
+            {"type": "text", "text": block.text} for block in text_blocks
+        ]
         if not content:
             content.append({"type": "text", "text": "(see attached image)"})
         content.extend(self._serialize_user_block(block) for block in image_blocks)
         return content
 
-    def _build_tool_choice(self, tool_choice: str | SpecificToolChoice | None) -> dict[str, Any] | None:
+    def _build_tool_choice(
+        self, tool_choice: str | SpecificToolChoice | None
+    ) -> dict[str, Any] | None:
         if tool_choice is None:
             return None
         if isinstance(tool_choice, SpecificToolChoice):
@@ -549,12 +596,17 @@ class AnthropicProvider(BaseProviderAdapter):
                 output_config = {"effort": effort}
             return {"type": "adaptive"}, output_config
 
-        budget_tokens = reasoning.max_tokens or self._thinking_budget_for_effort(reasoning.effort or "medium")
+        budget_tokens = reasoning.max_tokens or self._thinking_budget_for_effort(
+            reasoning.effort or "medium"
+        )
         return {"type": "enabled", "budget_tokens": budget_tokens}, None
 
     def _supports_adaptive_thinking(self, model: ModelSpec) -> bool:
         model_name = model.model.lower()
-        return any(token in model_name for token in ("opus-4-6", "opus-4.6", "sonnet-4-6", "sonnet-4.6"))
+        return any(
+            token in model_name
+            for token in ("opus-4-6", "opus-4.6", "sonnet-4-6", "sonnet-4.6")
+        )
 
     def _adaptive_effort(self, model: ModelSpec, effort: str | None) -> str | None:
         if effort in {None, "minimal"}:
@@ -563,7 +615,12 @@ class AnthropicProvider(BaseProviderAdapter):
             "low": "low",
             "medium": "medium",
             "high": "high",
-            "xhigh": "max" if "opus-4-6" in model.model.lower() or "opus-4.6" in model.model.lower() else "high",
+            "xhigh": (
+                "max"
+                if "opus-4-6" in model.model.lower()
+                or "opus-4.6" in model.model.lower()
+                else "high"
+            ),
         }
         return mapping.get(effort)
 
@@ -579,7 +636,9 @@ class AnthropicProvider(BaseProviderAdapter):
 
     def _normalize_tool_call_id(self, model: ModelSpec, value: Any) -> str:
         normalized = str(value or "call").strip() or "call"
-        normalized = "".join(ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in normalized)
+        normalized = "".join(
+            ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in normalized
+        )
         max_length = model.capabilities.get("tool_call_id_max_length")
         if not isinstance(max_length, int) or max_length <= 0:
             max_length = 64
@@ -597,11 +656,15 @@ class AnthropicProvider(BaseProviderAdapter):
         value = options.provider_options.get("cache_retention", "short")
         return value if value in {"none", "short", "long"} else "short"
 
-    def _cache_control(self, model: ModelSpec, options: RequestOptions) -> dict[str, Any] | None:
+    def _cache_control(
+        self, model: ModelSpec, options: RequestOptions
+    ) -> dict[str, Any] | None:
         retention = self._resolve_cache_retention(options)
         if retention == "none":
             return None
-        if retention == "long" and self.resolve_base_url(model).startswith("https://api.anthropic.com"):
+        if retention == "long" and self.resolve_base_url(model).startswith(
+            "https://api.anthropic.com"
+        ):
             return {"type": "ephemeral", "ttl": "1h"}
         return {"type": "ephemeral"}
 
@@ -619,26 +682,39 @@ class AnthropicProvider(BaseProviderAdapter):
             blocks[-1]["cache_control"] = cache_control
         return blocks
 
-    def _apply_prompt_cache_control(self, *, messages: list[dict[str, Any]], options: RequestOptions) -> None:
+    def _apply_prompt_cache_control(
+        self, *, messages: list[dict[str, Any]], options: RequestOptions
+    ) -> None:
         if self._resolve_cache_retention(options) == "none" or not messages:
             return
-        cache_control = self._cache_control(ModelSpec(provider="anthropic", model="x", api_family="anthropic-messages"), options)
+        cache_control = self._cache_control(
+            ModelSpec(provider="anthropic", model="x", api_family="anthropic-messages"),
+            options,
+        )
         if cache_control is None:
             return
         last_message = messages[-1]
         content = last_message.get("content")
         if isinstance(content, str):
-            last_message["content"] = [{"type": "text", "text": content, "cache_control": cache_control}]
+            last_message["content"] = [
+                {"type": "text", "text": content, "cache_control": cache_control}
+            ]
             return
         if isinstance(content, list) and content:
             last_block = content[-1]
             if isinstance(last_block, dict):
                 last_block["cache_control"] = cache_control
 
-    def _build_metadata(self, request: GenerateRequest, options: RequestOptions) -> dict[str, Any] | None:
+    def _build_metadata(
+        self, request: GenerateRequest, options: RequestOptions
+    ) -> dict[str, Any] | None:
         metadata = options.provider_options.get("anthropic_metadata")
         if isinstance(metadata, dict):
-            result = {str(key): value for key, value in metadata.items() if key == "user_id" and isinstance(value, str)}
+            result = {
+                str(key): value
+                for key, value in metadata.items()
+                if key == "user_id" and isinstance(value, str)
+            }
             return result or None
         user_id = request.metadata.get("user_id")
         if isinstance(user_id, str):
@@ -651,10 +727,19 @@ class AnthropicProvider(BaseProviderAdapter):
         model_name = protocol_meta.get("anthropic_model")
         signature = protocol_meta.get("anthropic_signature") or block.signature
         if block.redacted:
-            return block.signature if isinstance(block.signature, str) and block.signature else None
+            return (
+                block.signature
+                if isinstance(block.signature, str) and block.signature
+                else None
+            )
         if provider_name is None and model_name is None:
             return signature if isinstance(signature, str) and signature else None
-        if provider_name == self.provider_name and model_name == model.model and isinstance(signature, str) and signature:
+        if (
+            provider_name == self.provider_name
+            and model_name == model.model
+            and isinstance(signature, str)
+            and signature
+        ):
             return signature
         return None
 
@@ -666,8 +751,14 @@ class AnthropicProvider(BaseProviderAdapter):
     ) -> bool:
         explicit = options.provider_options.get("interleaved_thinking")
         if isinstance(explicit, bool):
-            return explicit and request.reasoning is not None and not self._supports_adaptive_thinking(model)
-        return request.reasoning is not None and not self._supports_adaptive_thinking(model)
+            return (
+                explicit
+                and request.reasoning is not None
+                and not self._supports_adaptive_thinking(model)
+            )
+        return request.reasoning is not None and not self._supports_adaptive_thinking(
+            model
+        )
 
     def _should_enable_fine_grained_tool_streaming(
         self,

@@ -26,7 +26,9 @@ class _RefreshableAuth:
 
 
 class _FakeResponse:
-    def __init__(self, status: int, headers: dict[str, str] | None = None, body: bytes = b"{}") -> None:
+    def __init__(
+        self, status: int, headers: dict[str, str] | None = None, body: bytes = b"{}"
+    ) -> None:
         self.status = status
         self.headers = headers or {}
         self._body = body
@@ -156,7 +158,9 @@ async def test_http_transport_refreshes_auth_and_retries_once() -> None:
 
 
 @pytest.mark.asyncio
-async def test_http_transport_maps_incomplete_transfer_payload_as_retryable_connection_error() -> None:
+async def test_http_transport_maps_incomplete_transfer_payload_as_retryable_connection_error() -> (
+    None
+):
     class _BrokenSession:
         closed = False
 
@@ -171,7 +175,12 @@ async def test_http_transport_maps_incomplete_transfer_payload_as_retryable_conn
     transport = HttpTransport(session=_BrokenSession())
 
     with pytest.raises(TransientProviderError) as exc_info:
-        await transport.request("GET", "https://example.test", provider="openai", api_family="openai-responses")
+        await transport.request(
+            "GET",
+            "https://example.test",
+            provider="openai",
+            api_family="openai-responses",
+        )
 
     assert exc_info.value.error.code == "connection_error"
     assert exc_info.value.error.retryable is True
@@ -179,7 +188,67 @@ async def test_http_transport_maps_incomplete_transfer_payload_as_retryable_conn
 
 
 @pytest.mark.asyncio
-async def test_http_stream_response_maps_midstream_payload_failure_as_retryable_connection_error() -> None:
+async def test_http_transport_stream_applies_stream_read_timeout_when_no_base_timeout_is_set() -> (
+    None
+):
+    session = _FakeSession()
+    transport = HttpTransport(session=session)
+
+    response = await transport.stream(
+        "GET",
+        "https://example.test",
+        stream_read_timeout=12.5,
+    )
+
+    assert isinstance(session.calls[0]["timeout"], aiohttp.ClientTimeout)
+    assert session.calls[0]["timeout"].sock_read == 12.5
+    assert session.calls[0]["timeout"].total is None
+    await response.close()
+
+
+@pytest.mark.asyncio
+async def test_http_transport_stream_applies_stream_read_timeout_to_numeric_timeout() -> (
+    None
+):
+    session = _FakeSession()
+    transport = HttpTransport(session=session)
+
+    response = await transport.stream(
+        "GET",
+        "https://example.test",
+        timeout=30,
+        stream_read_timeout=7,
+    )
+
+    assert isinstance(session.calls[0]["timeout"], aiohttp.ClientTimeout)
+    assert session.calls[0]["timeout"].total == 30
+    assert session.calls[0]["timeout"].sock_read == 7
+    await response.close()
+
+
+@pytest.mark.asyncio
+async def test_http_transport_stream_preserves_explicit_client_timeout_sock_read() -> (
+    None
+):
+    session = _FakeSession()
+    transport = HttpTransport(session=session)
+
+    response = await transport.stream(
+        "GET",
+        "https://example.test",
+        timeout=aiohttp.ClientTimeout(total=20, sock_read=3),
+        stream_read_timeout=9,
+    )
+
+    assert session.calls[0]["timeout"].total == 20
+    assert session.calls[0]["timeout"].sock_read == 3
+    await response.close()
+
+
+@pytest.mark.asyncio
+async def test_http_stream_response_maps_midstream_payload_failure_as_retryable_connection_error() -> (
+    None
+):
     class _BrokenStreamSession:
         closed = False
 
@@ -190,7 +259,9 @@ async def test_http_stream_response_maps_midstream_payload_failure_as_retryable_
             self.closed = True
 
     transport = HttpTransport(session=_BrokenStreamSession())
-    response = await transport.stream("GET", "https://example.test", provider="openai", api_family="openai-responses")
+    response = await transport.stream(
+        "GET", "https://example.test", provider="openai", api_family="openai-responses"
+    )
 
     with pytest.raises(TransientProviderError) as exc_info:
         async for _ in response.iter_bytes():

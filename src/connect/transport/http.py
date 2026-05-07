@@ -122,7 +122,9 @@ class HttpStreamResponse:
         await self.close()
 
     def _map_exception(self, exc: Exception):
-        return self._exception_mapper(exc, provider=self._provider, api_family=self._api_family)
+        return self._exception_mapper(
+            exc, provider=self._provider, api_family=self._api_family
+        )
 
 
 class HttpTransport:
@@ -194,7 +196,9 @@ class HttpTransport:
                     url=str(response.url),
                 )
         except Exception as exc:
-            raise self._map_transport_exception(exc, provider=provider, api_family=api_family) from exc
+            raise self._map_transport_exception(
+                exc, provider=provider, api_family=api_family
+            ) from exc
 
     async def stream(
         self,
@@ -210,6 +214,7 @@ class HttpTransport:
         json_body: Any = None,
         data: Any = None,
         timeout: float | aiohttp.ClientTimeout | None = None,
+        stream_read_timeout: float | None = None,
         expected_status: int | set[int] | None = None,
     ) -> HttpStreamResponse:
         try:
@@ -225,6 +230,7 @@ class HttpTransport:
                 json_body=json_body,
                 data=data,
                 timeout=timeout,
+                stream_read_timeout=stream_read_timeout,
                 expected_status=expected_status,
             )
             try:
@@ -242,7 +248,9 @@ class HttpTransport:
                 api_family=api_family,
             )
         except Exception as exc:
-            raise self._map_transport_exception(exc, provider=provider, api_family=api_family) from exc
+            raise self._map_transport_exception(
+                exc, provider=provider, api_family=api_family
+            ) from exc
 
     async def _request_with_optional_refresh(
         self,
@@ -258,25 +266,39 @@ class HttpTransport:
         json_body: Any,
         data: Any,
         timeout: float | aiohttp.ClientTimeout | None,
+        stream_read_timeout: float | None = None,
         expected_status: int | set[int] | None,
     ) -> aiohttp.ClientResponse:
         resolved_auth = auth or self._auth
         response = await self._perform_request(
             method,
             url,
-            context=AuthContext(provider=provider, model=model, api_family=api_family, method=method, url=url),
+            context=AuthContext(
+                provider=provider,
+                model=model,
+                api_family=api_family,
+                method=method,
+                url=url,
+            ),
             params=params,
             headers=headers,
             auth=resolved_auth,
             json_body=json_body,
             data=data,
             timeout=timeout,
+            stream_read_timeout=stream_read_timeout,
         )
         if response.status not in {401, 403} or resolved_auth is None:
             return response
 
         refreshed = await resolved_auth.refresh(
-            AuthContext(provider=provider, model=model, api_family=api_family, method=method, url=url)
+            AuthContext(
+                provider=provider,
+                model=model,
+                api_family=api_family,
+                method=method,
+                url=url,
+            )
         )
         if not refreshed:
             return response
@@ -285,13 +307,20 @@ class HttpTransport:
         return await self._perform_request(
             method,
             url,
-            context=AuthContext(provider=provider, model=model, api_family=api_family, method=method, url=url),
+            context=AuthContext(
+                provider=provider,
+                model=model,
+                api_family=api_family,
+                method=method,
+                url=url,
+            ),
             params=params,
             headers=headers,
             auth=resolved_auth,
             json_body=json_body,
             data=data,
             timeout=timeout,
+            stream_read_timeout=stream_read_timeout,
         )
 
     async def _perform_request(
@@ -306,10 +335,13 @@ class HttpTransport:
         json_body: Any,
         data: Any,
         timeout: float | aiohttp.ClientTimeout | None,
+        stream_read_timeout: float | None = None,
     ) -> aiohttp.ClientResponse:
         resolved = await resolve_transport_auth(auth, context=context)
         merged_params = dict(params or {})
-        merged_params.update({str(key): str(value) for key, value in resolved.params.items()})
+        merged_params.update(
+            {str(key): str(value) for key, value in resolved.params.items()}
+        )
         merged_headers = self._merge_headers(headers)
         merged_headers.update(resolved.headers)
         return await self._session.request(
@@ -319,7 +351,9 @@ class HttpTransport:
             headers=merged_headers,
             json=json_body,
             data=data,
-            timeout=self._normalize_timeout(timeout),
+            timeout=self._normalize_timeout(
+                timeout, stream_read_timeout=stream_read_timeout
+            ),
         )
 
     async def _raise_for_status(
@@ -362,10 +396,25 @@ class HttpTransport:
     def _normalize_timeout(
         self,
         timeout: float | aiohttp.ClientTimeout | None,
+        *,
+        stream_read_timeout: float | None = None,
     ) -> aiohttp.ClientTimeout | None:
-        if timeout is None or isinstance(timeout, aiohttp.ClientTimeout):
+        if timeout is None:
+            if stream_read_timeout is None:
+                return None
+            return aiohttp.ClientTimeout(sock_read=stream_read_timeout)
+        if isinstance(timeout, aiohttp.ClientTimeout):
+            if stream_read_timeout is None or timeout.sock_read is not None:
+                return timeout
+            return aiohttp.ClientTimeout(
+                total=timeout.total,
+                connect=timeout.connect,
+                sock_connect=timeout.sock_connect,
+                sock_read=stream_read_timeout,
+            )
+        if stream_read_timeout is None:
             return timeout
-        return aiohttp.ClientTimeout(total=timeout)
+        return aiohttp.ClientTimeout(total=timeout, sock_read=stream_read_timeout)
 
     def _map_transport_exception(
         self,

@@ -76,7 +76,9 @@ class GeminiProvider(BaseProviderAdapter):
         cache_read_tokens = int(payload.get("cachedContentTokenCount") or 0)
         output_tokens = int(payload.get("candidatesTokenCount") or 0)
         reasoning_tokens = int(payload.get("thoughtsTokenCount") or 0)
-        total_tokens = int(payload.get("totalTokenCount") or (prompt_tokens + output_tokens))
+        total_tokens = int(
+            payload.get("totalTokenCount") or (prompt_tokens + output_tokens)
+        )
 
         return Usage(
             input_tokens=max(prompt_tokens - cache_read_tokens, 0),
@@ -100,7 +102,9 @@ class GeminiProvider(BaseProviderAdapter):
         }
         default_headers = model.protocol_defaults.get("headers")
         if isinstance(default_headers, dict):
-            headers.update({str(key): str(value) for key, value in default_headers.items()})
+            headers.update(
+                {str(key): str(value) for key, value in default_headers.items()}
+            )
         return headers
 
     def build_error(
@@ -125,14 +129,27 @@ class GeminiProvider(BaseProviderAdapter):
             google_reason = None
             for detail in details:
                 detail_type = str(detail.get("@type") or "")
-                if detail_type.endswith("google.rpc.ErrorInfo") and isinstance(detail.get("reason"), str):
+                if detail_type.endswith("google.rpc.ErrorInfo") and isinstance(
+                    detail.get("reason"), str
+                ):
                     google_reason = detail["reason"]
                     break
 
-            status_value = str(google_status).lower() if isinstance(google_status, str) and google_status else None
-            reason_value = str(google_reason).lower() if isinstance(google_reason, str) and google_reason else None
+            status_value = (
+                str(google_status).lower()
+                if isinstance(google_status, str) and google_status
+                else None
+            )
+            reason_value = (
+                str(google_reason).lower()
+                if isinstance(google_reason, str) and google_reason
+                else None
+            )
 
-            if reason_value in {"api_key_invalid", "invalid_api_key"} or status_value in {
+            if reason_value in {
+                "api_key_invalid",
+                "invalid_api_key",
+            } or status_value in {
                 "unauthenticated",
                 "permission_denied",
             }:
@@ -144,7 +161,11 @@ class GeminiProvider(BaseProviderAdapter):
                 code = status_value
                 retryable = True
             else:
-                code = status_value or reason_value or str(payload.get("code") or code).lower()
+                code = (
+                    status_value
+                    or reason_value
+                    or str(payload.get("code") or code).lower()
+                )
 
             if isinstance(payload.get("message"), str) and payload.get("message"):
                 message = str(payload["message"])
@@ -203,7 +224,9 @@ class GeminiProvider(BaseProviderAdapter):
                         {
                             "name": tool.name,
                             "description": tool.description,
-                            "parametersJsonSchema": self._convert_tool_schema(tool.input_schema),
+                            "parametersJsonSchema": self._convert_tool_schema(
+                                tool.input_schema
+                            ),
                         }
                         for tool in request.tools
                     ]
@@ -259,6 +282,7 @@ class GeminiProvider(BaseProviderAdapter):
                 headers={**headers, **options.headers},
                 json_body=payload,
                 timeout=options.timeout,
+                stream_read_timeout=options.stream_read_timeout,
                 expected_status=200,
             )
         except HttpStatusError as exc:
@@ -288,36 +312,52 @@ class GeminiProvider(BaseProviderAdapter):
                         response_id = chunk.get("responseId")
                         if isinstance(response_id, str) and response_id:
                             assembler.response_id = response_id
-                            assembler.update_protocol_state(gemini_response_id=response_id)
+                            assembler.update_protocol_state(
+                                gemini_response_id=response_id
+                            )
 
                         model_version = chunk.get("modelVersion")
                         if isinstance(model_version, str) and model_version:
-                            assembler.update_provider_meta(gemini_model_version=model_version)
+                            assembler.update_provider_meta(
+                                gemini_model_version=model_version
+                            )
 
                         usage_payload = chunk.get("usageMetadata")
                         partial_usage: Usage | None = None
                         if isinstance(usage_payload, dict):
                             last_usage_payload = usage_payload
-                            partial_usage = self.build_usage(usage_payload, completeness="partial")
+                            partial_usage = self.build_usage(
+                                usage_payload, completeness="partial"
+                            )
 
                         prompt_feedback = chunk.get("promptFeedback")
-                        if isinstance(prompt_feedback, dict) and prompt_feedback.get("blockReason"):
+                        if isinstance(prompt_feedback, dict) and prompt_feedback.get(
+                            "blockReason"
+                        ):
                             finish_reason = "content_filter"
 
                         if partial_usage is not None:
                             yield assembler.set_usage(partial_usage)
 
                         candidates = chunk.get("candidates")
-                        candidate = candidates[0] if isinstance(candidates, list) and candidates else None
+                        candidate = (
+                            candidates[0]
+                            if isinstance(candidates, list) and candidates
+                            else None
+                        )
                         if not isinstance(candidate, dict):
                             continue
 
-                        candidate_finish_reason = self.normalize_finish_reason(candidate.get("finishReason"))
+                        candidate_finish_reason = self.normalize_finish_reason(
+                            candidate.get("finishReason")
+                        )
                         if candidate_finish_reason != "unknown":
                             finish_reason = candidate_finish_reason
 
                         content = candidate.get("content")
-                        parts = content.get("parts") if isinstance(content, dict) else None
+                        parts = (
+                            content.get("parts") if isinstance(content, dict) else None
+                        )
                         if not isinstance(parts, list):
                             continue
 
@@ -328,13 +368,18 @@ class GeminiProvider(BaseProviderAdapter):
                             part_states=part_states,
                         ):
                             yield emitted_event
-                            if isinstance(emitted_event, ResponseEndEvent) or emitted_event.type == "error":
+                            if (
+                                isinstance(emitted_event, ResponseEndEvent)
+                                or emitted_event.type == "error"
+                            ):
                                 return
             except ProviderProtocolError as exc:
                 yield assembler.error(exc.error)
                 return
 
-        for emitted_event in self._finalize_open_parts(assembler=assembler, part_states=part_states):
+        for emitted_event in self._finalize_open_parts(
+            assembler=assembler, part_states=part_states
+        ):
             yield emitted_event
 
         final_usage = self.build_usage(last_usage_payload, completeness="final")
@@ -345,7 +390,9 @@ class GeminiProvider(BaseProviderAdapter):
             finish_reason = "tool_call"
         yield assembler.response_end(finish_reason=finish_reason)
 
-    def _build_contents(self, model: ModelSpec, request: GenerateRequest) -> list[dict[str, Any]]:
+    def _build_contents(
+        self, model: ModelSpec, request: GenerateRequest
+    ) -> list[dict[str, Any]]:
         contents: list[dict[str, Any]] = []
         for message in request.messages:
             serialized = self._serialize_message(model, message)
@@ -355,7 +402,9 @@ class GeminiProvider(BaseProviderAdapter):
                 contents.append(serialized)
         return contents
 
-    def _serialize_message(self, model: ModelSpec, message: Message) -> dict[str, Any] | list[dict[str, Any]]:
+    def _serialize_message(
+        self, model: ModelSpec, message: Message
+    ) -> dict[str, Any] | list[dict[str, Any]]:
         if isinstance(message, UserMessage):
             content = message.content
             if isinstance(content, str):
@@ -369,21 +418,29 @@ class GeminiProvider(BaseProviderAdapter):
             for block in message.content:
                 if block.type == "text":
                     part = {"text": block.text}
-                    signature = self._resolve_replay_signature(model, block.protocol_meta)
+                    signature = self._resolve_replay_signature(
+                        model, block.protocol_meta
+                    )
                     if isinstance(signature, str) and signature:
                         part["thoughtSignature"] = signature
                     parts.append(part)
                 elif block.type == "reasoning":
-                    signature = self._resolve_replay_signature(model, block.protocol_meta, fallback=block.signature)
+                    signature = self._resolve_replay_signature(
+                        model, block.protocol_meta, fallback=block.signature
+                    )
                     part = {"text": block.text}
                     if signature is not None:
                         part["thought"] = True
                         part["thoughtSignature"] = signature
                     parts.append(part)
                 elif block.type == "tool_call":
-                    signature = self._resolve_replay_signature(model, block.protocol_meta)
+                    signature = self._resolve_replay_signature(
+                        model, block.protocol_meta
+                    )
                     effective_signature = signature or (
-                        self.skip_thought_signature if self._is_gemini3_model(model) else None
+                        self.skip_thought_signature
+                        if self._is_gemini3_model(model)
+                        else None
                     )
                     part = {
                         "functionCall": {
@@ -399,15 +456,21 @@ class GeminiProvider(BaseProviderAdapter):
 
         if isinstance(message, ToolResultMessage):
             text_blocks = [block for block in message.content if block.type == "text"]
-            image_blocks = [block for block in message.content if isinstance(block, ImageBlock)]
+            image_blocks = [
+                block for block in message.content if isinstance(block, ImageBlock)
+            ]
             output_text = "\n".join(block.text for block in text_blocks)
             function_response: dict[str, Any] = {
                 "name": message.tool_name,
-                "response": {"error" if message.is_error else "output": output_text or ""},
+                "response": {
+                    "error" if message.is_error else "output": output_text or ""
+                },
                 "id": self._normalize_tool_call_id(model, message.tool_call_id),
             }
             if image_blocks and self._supports_multimodal_function_response(model):
-                function_response["parts"] = [self._serialize_user_or_tool_block(block) for block in image_blocks]
+                function_response["parts"] = [
+                    self._serialize_user_or_tool_block(block) for block in image_blocks
+                ]
 
             content_items: list[dict[str, Any]] = [
                 {
@@ -419,8 +482,10 @@ class GeminiProvider(BaseProviderAdapter):
                 content_items.append(
                     {
                         "role": "user",
-                        "parts": [{"text": "Tool result image:"}] + [
-                            self._serialize_user_or_tool_block(block) for block in image_blocks
+                        "parts": [{"text": "Tool result image:"}]
+                        + [
+                            self._serialize_user_or_tool_block(block)
+                            for block in image_blocks
                         ],
                     }
                 )
@@ -440,7 +505,9 @@ class GeminiProvider(BaseProviderAdapter):
             }
         raise TypeError(f"Unsupported Gemini block type: {block.type!r}")
 
-    def _build_tool_config(self, tool_choice: str | SpecificToolChoice | None) -> dict[str, Any] | None:
+    def _build_tool_config(
+        self, tool_choice: str | SpecificToolChoice | None
+    ) -> dict[str, Any] | None:
         if tool_choice is None:
             return None
         if isinstance(tool_choice, SpecificToolChoice):
@@ -460,7 +527,9 @@ class GeminiProvider(BaseProviderAdapter):
     def _convert_tool_schema(self, schema: dict[str, Any]) -> dict[str, Any]:
         return copy.deepcopy(schema)
 
-    def _build_thinking_config(self, model: ModelSpec, request: GenerateRequest) -> dict[str, Any] | None:
+    def _build_thinking_config(
+        self, model: ModelSpec, request: GenerateRequest
+    ) -> dict[str, Any] | None:
         reasoning = request.reasoning
         if reasoning is None:
             return self._disabled_thinking_config(model)
@@ -475,7 +544,8 @@ class GeminiProvider(BaseProviderAdapter):
             }
         return {
             "includeThoughts": True,
-            "thinkingBudget": reasoning.max_tokens or self._thinking_budget_for_effort(model, effort),
+            "thinkingBudget": reasoning.max_tokens
+            or self._thinking_budget_for_effort(model, effort),
         }
 
     def _supports_multimodal_function_response(self, model: ModelSpec) -> bool:
@@ -501,10 +571,16 @@ class GeminiProvider(BaseProviderAdapter):
                 continue
 
             state = self._current_open_part_state(part_states)
-            if state is None or not self._part_state_matches(model=model, part=part, kind=kind, state=state):
+            if state is None or not self._part_state_matches(
+                model=model, part=part, kind=kind, state=state
+            ):
                 if state is not None:
-                    emitted.extend(self._finalize_part_state(state, assembler=assembler))
-                state = self._new_part_state(model=model, kind=kind, part=part, part_states=part_states)
+                    emitted.extend(
+                        self._finalize_part_state(state, assembler=assembler)
+                    )
+                state = self._new_part_state(
+                    model=model, kind=kind, part=part, part_states=part_states
+                )
                 part_states.append(state)
                 emitted.extend(self._start_part_state(state, assembler=assembler))
 
@@ -527,9 +603,15 @@ class GeminiProvider(BaseProviderAdapter):
                     arguments = {}
                 arguments_json = self._encode_tool_arguments(arguments)
                 previous = state["buffer"]
-                delta = arguments_json[len(previous) :] if arguments_json.startswith(previous) else arguments_json
+                delta = (
+                    arguments_json[len(previous) :]
+                    if arguments_json.startswith(previous)
+                    else arguments_json
+                )
                 if delta:
-                    emitted.append(assembler.tool_call_delta(state["content_index"], delta))
+                    emitted.append(
+                        assembler.tool_call_delta(state["content_index"], delta)
+                    )
                 state["buffer"] = arguments_json
                 state["arguments"] = arguments
                 continue
@@ -541,7 +623,9 @@ class GeminiProvider(BaseProviderAdapter):
                 if kind == "text":
                     emitted.append(assembler.text_delta(state["content_index"], delta))
                 else:
-                    emitted.append(assembler.reasoning_delta(state["content_index"], delta))
+                    emitted.append(
+                        assembler.reasoning_delta(state["content_index"], delta)
+                    )
             state["buffer"] = text
 
         return emitted
@@ -559,7 +643,9 @@ class GeminiProvider(BaseProviderAdapter):
             emitted.extend(self._finalize_part_state(state, assembler=assembler))
         return emitted
 
-    def _start_part_state(self, state: dict[str, Any], *, assembler: ResponseAssembler) -> list[StreamEvent]:
+    def _start_part_state(
+        self, state: dict[str, Any], *, assembler: ResponseAssembler
+    ) -> list[StreamEvent]:
         content_index = state["content_index"]
         if state["kind"] == "text":
             return [assembler.text_start(content_index)]
@@ -573,14 +659,22 @@ class GeminiProvider(BaseProviderAdapter):
             )
         ]
 
-    def _finalize_part_state(self, state: dict[str, Any], *, assembler: ResponseAssembler) -> list[StreamEvent]:
+    def _finalize_part_state(
+        self, state: dict[str, Any], *, assembler: ResponseAssembler
+    ) -> list[StreamEvent]:
         state["finalized"] = True
         content_index = state["content_index"]
         if state["kind"] == "text":
             return [assembler.text_end(content_index)]
         if state["kind"] == "reasoning":
-            return [assembler.reasoning_end(content_index, signature=state.get("signature"))]
-        return [assembler.tool_call_end(content_index, arguments=state.get("arguments") or {})]
+            return [
+                assembler.reasoning_end(content_index, signature=state.get("signature"))
+            ]
+        return [
+            assembler.tool_call_end(
+                content_index, arguments=state.get("arguments") or {}
+            )
+        ]
 
     def _new_part_state(
         self,
@@ -590,10 +684,13 @@ class GeminiProvider(BaseProviderAdapter):
         part: dict[str, Any],
         part_states: list[dict[str, Any] | None],
     ) -> dict[str, Any]:
-        content_index = max(
-            (state["content_index"] for state in part_states if state is not None),
-            default=-1,
-        ) + 1
+        content_index = (
+            max(
+                (state["content_index"] for state in part_states if state is not None),
+                default=-1,
+            )
+            + 1
+        )
         state: dict[str, Any] = {
             "kind": kind,
             "content_index": content_index,
@@ -625,7 +722,9 @@ class GeminiProvider(BaseProviderAdapter):
             )
         return state
 
-    def _current_open_part_state(self, part_states: list[dict[str, Any] | None]) -> dict[str, Any] | None:
+    def _current_open_part_state(
+        self, part_states: list[dict[str, Any] | None]
+    ) -> dict[str, Any] | None:
         for state in reversed(part_states):
             if state is None or state["finalized"]:
                 continue
@@ -651,7 +750,9 @@ class GeminiProvider(BaseProviderAdapter):
                 model,
                 tool_call_id if isinstance(tool_call_id, str) else None,
             )
-            return tool_name == state.get("tool_name") and normalized_tool_call_id == state.get("source_tool_call_id")
+            return tool_name == state.get(
+                "tool_name"
+            ) and normalized_tool_call_id == state.get("source_tool_call_id")
 
         text = str(part.get("text") or "")
         buffer = str(state.get("buffer") or "")
@@ -671,7 +772,9 @@ class GeminiProvider(BaseProviderAdapter):
     def _encode_tool_arguments(self, arguments: dict[str, Any]) -> str:
         return json.dumps(arguments or {}, separators=(",", ":"), sort_keys=True)
 
-    def _iter_stream_chunks(self, payload: Any, *, model: ModelSpec) -> list[dict[str, Any]]:
+    def _iter_stream_chunks(
+        self, payload: Any, *, model: ModelSpec
+    ) -> list[dict[str, Any]]:
         if isinstance(payload, dict):
             return [payload]
         if isinstance(payload, list):
@@ -765,11 +868,15 @@ class GeminiProvider(BaseProviderAdapter):
             return budgets.get(effort, 8192)
         return -1
 
-    def _normalize_tool_call_id(self, model: ModelSpec, tool_call_id: str | None) -> str:
+    def _normalize_tool_call_id(
+        self, model: ModelSpec, tool_call_id: str | None
+    ) -> str:
         normalized = (tool_call_id or "").strip() or "call"
         charset = model.capabilities.get("tool_call_id_charset")
         if charset == "alnum_-":
-            normalized = "".join(ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in normalized)
+            normalized = "".join(
+                ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in normalized
+            )
         max_length = model.capabilities.get("tool_call_id_max_length")
         if isinstance(max_length, int) and max_length > 0:
             normalized = normalized[:max_length]
