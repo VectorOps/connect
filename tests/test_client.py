@@ -284,6 +284,12 @@ def test_environment_credential_manager_reads_and_writes_tokens() -> None:
     assert env["OPENAI_API_KEY"] == "sk-env"
 
 
+def test_request_options_accepts_stream_read_timeout() -> None:
+    options = RequestOptions(stream_read_timeout=5.0)
+
+    assert options.stream_read_timeout == 5.0
+
+
 @pytest.mark.asyncio
 async def test_async_client_emits_observability_events() -> None:
     session = _FakeClientSession()
