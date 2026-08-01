@@ -449,6 +449,29 @@ def test_openai_build_payload_requests_encrypted_reasoning_content() -> None:
     assert payload["include"] == ["message.output_text.logprobs", "reasoning.encrypted_content"]
 
 
+@pytest.mark.parametrize("provider_cls, provider_name, api_family", [(OpenAIProvider, "openai", "openai-responses"), (lambda: __import__("connect.providers", fromlist=["ChatGPTProvider"]).ChatGPTProvider(), "chatgpt", "chatgpt-responses")])
+def test_openai_family_marks_server_overloaded_errors_as_retryable(provider_cls, provider_name, api_family) -> None:
+    provider = provider_cls()
+
+    error = provider.build_error(
+        {
+            "error": {
+                "code": "server_is_overloaded",
+                "message": "Our servers are currently overloaded. Please try again later.",
+                "param": None,
+                "type": "service_unavailable_error",
+            },
+            "sequence_number": 2,
+            "type": "error",
+        }
+    )
+
+    assert error.code == "server_is_overloaded"
+    assert error.provider == provider_name
+    assert error.api_family == api_family
+    assert error.retryable is True
+
+
 @pytest.mark.asyncio
 async def test_openai_stream_response_maps_reasoning_summary_and_tool_use_finish_reason() -> None:
     provider = OpenAIProvider()

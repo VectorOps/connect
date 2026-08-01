@@ -122,6 +122,8 @@ class OpenAIProvider(BaseProviderAdapter):
         if isinstance(payload, dict):
             code = str(payload.get("code") or payload.get("type") or code)
             message = str(payload.get("message") or message)
+            if code == "server_is_overloaded" or payload.get("type") == "service_unavailable_error":
+                retryable = True
 
         return make_error_info(
             code=code,
