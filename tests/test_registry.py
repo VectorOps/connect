@@ -43,7 +43,7 @@ def test_get_model_returns_registered_builtin_model() -> None:
 def test_model_registry_resolves_unambiguous_bare_model() -> None:
     registry = ModelRegistry(BUILTIN_MODELS)
 
-    model = registry.resolve("claude-3-7-sonnet-latest")
+    model = registry.resolve("claude-sonnet-4-6")
 
     assert model.provider == "anthropic"
 
