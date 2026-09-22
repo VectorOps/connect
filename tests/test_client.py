@@ -324,6 +324,43 @@ async def test_async_client_emits_observability_events() -> None:
     assert observed[-1]["finish_reason"] == "stop"
 
 
+def test_async_client_applies_tagged_fast_processing_mode_when_request_is_unset() -> None:
+    model = ModelSpec(
+        provider="chatgpt",
+        model="gpt-6-astra",
+        api_family="chatgpt-responses",
+    )
+    request = GenerateRequest(messages=[UserMessage(content="ping")])
+
+    registry = ModelRegistry([model])
+    resolved_model = registry.resolve("chatgpt/gpt-6-astra:fast")
+    tagged_processing_mode = "fast"
+    effective_request = AsyncLLMClient._effective_request(
+        AsyncLLMClient.__new__(AsyncLLMClient),
+        request,
+        tagged_processing_mode=tagged_processing_mode,
+    )
+
+    assert resolved_model.provider == "chatgpt"
+    assert resolved_model.model == "gpt-6-astra"
+    assert effective_request.processing_mode == "fast"
+
+
+def test_async_client_prefers_explicit_processing_mode_over_model_tag() -> None:
+    request = GenerateRequest(
+        messages=[UserMessage(content="ping")],
+        processing_mode="default",
+    )
+
+    effective_request = AsyncLLMClient._effective_request(
+        AsyncLLMClient.__new__(AsyncLLMClient),
+        request,
+        tagged_processing_mode="fast",
+    )
+
+    assert effective_request.processing_mode == "default"
+
+
 @pytest.mark.asyncio
 async def test_stream_handle_invokes_close_callback_on_terminal_event() -> None:
     closed: list[str] = []

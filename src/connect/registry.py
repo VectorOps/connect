@@ -6,6 +6,22 @@ from .models import BUILTIN_MODELS
 from .types import ModelSpec
 
 
+def split_model_reference(model: str) -> tuple[str | None, str, str | None]:
+    provider: str | None = None
+    model_name = model
+    tag: str | None = None
+
+    if "/" in model_name:
+        provider, model_name = model_name.split("/", 1)
+
+    if ":" in model_name:
+        model_name, candidate_tag = model_name.rsplit(":", 1)
+        if candidate_tag:
+            tag = candidate_tag
+
+    return provider, model_name, tag
+
+
 class RegistryError(ValueError):
     pass
 
@@ -60,26 +76,27 @@ class ModelRegistry:
             raise ModelNotFoundError(f"Provider '{provider}' has no registered models") from exc
 
     def resolve(self, model: str, provider: str | None = None) -> ModelSpec:
-        if provider is not None:
-            return self.get(provider, model)
+        explicit_provider, explicit_model, _tag = split_model_reference(model)
 
-        if "/" in model:
-            explicit_provider, explicit_model = model.split("/", 1)
+        if provider is not None:
+            return self.get(provider, explicit_model)
+
+        if explicit_provider is not None:
             return self.get(explicit_provider, explicit_model)
 
         matches = [
             registered
             for provider_models in self._models_by_provider.values()
             for registered_model, registered in provider_models.items()
-            if registered_model == model
+            if registered_model == explicit_model
         ]
 
         if not matches:
-            raise ModelNotFoundError(f"Model '{model}' is not registered")
+            raise ModelNotFoundError(f"Model '{explicit_model}' is not registered")
 
         if len(matches) > 1:
             candidates = ", ".join(sorted(f"{candidate.provider}/{candidate.model}" for candidate in matches))
-            raise AmbiguousModelError(f"Model '{model}' is ambiguous. Candidates: {candidates}")
+            raise AmbiguousModelError(f"Model '{explicit_model}' is ambiguous. Candidates: {candidates}")
 
         return matches[0]
 

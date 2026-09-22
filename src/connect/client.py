@@ -9,7 +9,13 @@ import aiohttp
 from .auth import AuthContext, resolve_transport_auth
 from .auth_router import AuthCredentialManager, DynamicAuthRouter
 from .exceptions import ConnectError, exception_from_error_info
-from .registry import ModelRegistry, ProviderRegistry, default_model_registry, default_provider_registry
+from .registry import (
+    ModelRegistry,
+    ProviderRegistry,
+    default_model_registry,
+    default_provider_registry,
+    split_model_reference,
+)
 from .transport import HttpTransport
 from .types import AssistantMessage, GenerateRequest, ModelSpec, RequestOptions, StreamEvent, validate_request_for_model
 
@@ -126,8 +132,12 @@ class AsyncLLMClient:
         provider: str | None,
         options: RequestOptions,
     ) -> typing.AsyncIterator[StreamEvent]:
-        resolved_model = self._resolve_model(model, provider=provider)
-        validate_request_for_model(resolved_model, request)
+        resolved_model, tagged_processing_mode = self._resolve_model(model, provider=provider)
+        effective_request = self._effective_request(
+            request,
+            tagged_processing_mode=tagged_processing_mode,
+        )
+        validate_request_for_model(resolved_model, effective_request)
         request_started_at = time.perf_counter()
         first_token_emitted = False
 
@@ -161,7 +171,7 @@ class AsyncLLMClient:
         try:
             async for event in provider_adapter.stream_response(
                 model=resolved_model,
-                request=request,
+                request=effective_request,
                 options=effective_options,
                 http=self.http,
             ):
@@ -229,10 +239,32 @@ class AsyncLLMClient:
             )
             raise
 
-    def _resolve_model(self, model: str | ModelSpec, *, provider: str | None) -> ModelSpec:
+    def _resolve_model(
+        self,
+        model: str | ModelSpec,
+        *,
+        provider: str | None,
+    ) -> tuple[ModelSpec, str | None]:
         if isinstance(model, ModelSpec):
-            return model
-        return self.model_registry.resolve(model, provider=provider)
+            return model, None
+
+        explicit_provider, _model_name, tag = split_model_reference(model)
+        resolved_provider = provider or explicit_provider
+        return self.model_registry.resolve(model, provider=resolved_provider), tag
+
+    def _effective_request(
+        self,
+        request: GenerateRequest,
+        *,
+        tagged_processing_mode: str | None,
+    ) -> GenerateRequest:
+        if request.processing_mode is not None or tagged_processing_mode is None:
+            return request
+
+        if tagged_processing_mode not in {"default", "fast"}:
+            return request
+
+        return request.model_copy(update={"processing_mode": tagged_processing_mode})
 
     async def _emit_event(self, event: dict[str, typing.Any]) -> None:
         if self.event_hook is None:

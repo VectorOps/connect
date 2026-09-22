@@ -5,7 +5,7 @@ import decimal
 import pytest
 
 from connect.models import BUILTIN_MODELS, GeneratedModelsDocument, ModelPricing, calculate_usage_cost
-from connect.registry import AmbiguousModelError, ModelNotFoundError, ModelRegistry, get_model, list_models
+from connect.registry import AmbiguousModelError, ModelNotFoundError, ModelRegistry, get_model, list_models, split_model_reference
 from connect.types import ModelSpec, Usage
 
 
@@ -55,6 +55,28 @@ def test_model_registry_resolves_provider_model_string_with_slash_separator() ->
 
     assert model.provider == "openai"
     assert model.model == "gpt-4.1-mini"
+
+
+def test_model_registry_resolves_provider_model_string_with_tag_suffix() -> None:
+    registry = ModelRegistry(BUILTIN_MODELS)
+
+    model = registry.resolve("openai/gpt-4.1-mini:fast")
+
+    assert model.provider == "openai"
+    assert model.model == "gpt-4.1-mini"
+
+
+def test_split_model_reference_parses_provider_model_and_tag() -> None:
+    assert split_model_reference("chatgpt/gpt-6-astra:fast") == (
+        "chatgpt",
+        "gpt-6-astra",
+        "fast",
+    )
+    assert split_model_reference("gpt-6-astra:fast") == (
+        None,
+        "gpt-6-astra",
+        "fast",
+    )
 
 
 def test_model_registry_rejects_ambiguous_bare_model() -> None:

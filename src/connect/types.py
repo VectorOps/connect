@@ -567,16 +567,6 @@ def request_uses_images(request: GenerateRequest) -> bool:
 
 
 def validate_request_for_model(model: ModelSpec, request: GenerateRequest) -> None:
-    if request.processing_mode not in {None, "default"}:
-        processing_modes = model.capabilities.get("processing_modes")
-        supports_processing_mode = isinstance(processing_modes, dict) and isinstance(
-            processing_modes.get(request.processing_mode), dict
-        )
-        if not supports_processing_mode:
-            raise ValueError(
-                f"Model '{model.provider}:{model.model}' does not support processing mode '{request.processing_mode}'"
-            )
-
     if request.tools and not model.supports_tools:
         raise ValueError(f"Model '{model.provider}:{model.model}' does not support tool use")
 

@@ -197,6 +197,19 @@ def test_openai_build_payload_applies_fast_processing_mode_when_supported() -> N
     assert payload["service_tier"] == "priority"
 
 
+def test_openai_build_payload_ignores_unsupported_fast_processing_mode() -> None:
+    provider = OpenAIProvider()
+    model = _openai_model(capabilities={"supports_developer_role": True})
+    request = GenerateRequest(
+        messages=[UserMessage(content="Hello")],
+        processing_mode="fast",
+    )
+
+    payload = provider.build_payload(model, request, RequestOptions())
+
+    assert "service_tier" not in payload
+
+
 def test_chatgpt_build_payload_applies_fast_processing_mode_when_supported() -> None:
     from connect.providers import ChatGPTProvider
 

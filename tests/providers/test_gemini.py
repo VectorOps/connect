@@ -22,7 +22,6 @@ from connect.types import (
     ToolResultMessage,
     ToolSpec,
     UserMessage,
-    validate_request_for_model,
 )
 
 
@@ -266,17 +265,6 @@ def test_gemini_build_payload_disables_default_thinking_when_not_requested() -> 
     payload = provider.build_payload(model, request, RequestOptions())
 
     assert payload["generationConfig"]["thinkingConfig"] == {"thinkingBudget": 0}
-
-
-def test_validate_request_for_model_rejects_unsupported_fast_processing_mode() -> None:
-    model = _gemini_model(model="gemini-2.5-flash")
-    request = GenerateRequest(
-        messages=[UserMessage(content="hi")],
-        processing_mode="fast",
-    )
-
-    with pytest.raises(ValueError, match="does not support processing mode 'fast'"):
-        validate_request_for_model(model, request)
 
 
 def test_gemini_build_payload_accepts_generated_assistant_message_verbatim() -> None:
