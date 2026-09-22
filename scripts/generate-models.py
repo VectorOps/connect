@@ -79,11 +79,56 @@ def _decimal_or_none(value: int | float | None) -> str | None:
     return str(value)
 
 
+def _processing_modes(model: dict) -> dict:
+    experimental = model.get("experimental")
+    if not isinstance(experimental, dict):
+        return {}
+
+    modes = experimental.get("modes")
+    if not isinstance(modes, dict):
+        return {}
+
+    normalized_modes: dict[str, dict] = {}
+    for mode_name, mode in modes.items():
+        if not isinstance(mode, dict):
+            continue
+
+        provider = mode.get("provider")
+        if not isinstance(provider, dict):
+            continue
+
+        body = provider.get("body")
+        headers = provider.get("headers")
+        cost = mode.get("cost")
+
+        mode_payload: dict[str, dict | None] = {}
+        if isinstance(body, dict) and body:
+            mode_payload["body"] = body
+        if isinstance(headers, dict) and headers:
+            mode_payload["headers"] = headers
+        normalized_cost = _normalize_pricing(cost) if isinstance(cost, dict) else None
+        if normalized_cost is not None:
+            mode_payload["pricing"] = normalized_cost
+        if mode_payload:
+            normalized_modes[str(mode_name)] = mode_payload
+
+    return normalized_modes
+
+
 def _build_record(document: dict, target_provider: str, source_provider: str, model_id: str, api_family: str, base_url: str) -> dict:
     source_model = _get_source_model(document, source_provider, model_id)
     input_modalities = source_model.get("modalities", {}).get("input", [])
     output_modalities = source_model.get("modalities", {}).get("output", [])
     limit = source_model.get("limit", {})
+    processing_modes = _processing_modes(source_model)
+    capabilities = {
+        "supports_developer_role": target_provider in {"openai", "openrouter"},
+        "requires_explicit_reasoning_disable": target_provider == "anthropic",
+        "usage_final_only": target_provider in {"chatgpt", "anthropic"},
+        "supports_parallel_tool_calls": bool(source_model.get("tool_call", False)),
+    }
+    if processing_modes:
+        capabilities["processing_modes"] = processing_modes
 
     return {
         "provider": target_provider,
@@ -100,12 +145,7 @@ def _build_record(document: dict, target_provider: str, source_provider: str, mo
         "context_window": limit.get("context"),
         "max_output_tokens": limit.get("output"),
         "pricing": _normalize_pricing(source_model.get("cost")),
-        "capabilities": {
-            "supports_developer_role": target_provider in {"openai", "openrouter"},
-            "requires_explicit_reasoning_disable": target_provider == "anthropic",
-            "usage_final_only": target_provider in {"chatgpt", "anthropic"},
-            "supports_parallel_tool_calls": bool(source_model.get("tool_call", False)),
-        },
+        "capabilities": capabilities,
         "protocol_defaults": {},
         "extra": {
             "family": source_model.get("family"),

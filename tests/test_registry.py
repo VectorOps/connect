@@ -154,3 +154,19 @@ def test_calculate_usage_cost_returns_none_without_model_pricing() -> None:
     model = ModelSpec(provider="openai", model="gpt-4.1-mini", api_family="openai-responses")
 
     assert calculate_usage_cost(model, Usage()) is None
+
+
+def test_builtin_registry_exposes_fast_processing_mode_for_supported_models() -> None:
+    candidates = [
+        model
+        for model in BUILTIN_MODELS
+        if (model.provider, model.model)
+        in {
+            ("openai", "gpt-5.6"),
+            ("openai", "gpt-5.6-sol"),
+            ("anthropic", "claude-opus-5-5"),
+        }
+    ]
+
+    assert candidates
+    assert all("fast" in (model.capabilities.get("processing_modes") or {}) for model in candidates)

@@ -236,6 +236,42 @@ def test_anthropic_build_payload_can_disable_beta_headers_explicitly() -> None:
     assert "anthropic-beta" not in headers
 
 
+def test_anthropic_build_payload_applies_fast_processing_mode_when_supported() -> None:
+    provider = AnthropicProvider()
+    model = _anthropic_model(
+        model="claude-opus-5-5",
+        capabilities={
+            "tool_call_id_max_length": 64,
+            "processing_modes": {
+                "fast": {
+                    "body": {"speed": "fast"},
+                    "headers": {"anthropic-beta": "fast-mode-2026-02-01"},
+                }
+            },
+        },
+    )
+    request = GenerateRequest(
+        messages=[UserMessage(content="hello")],
+        processing_mode="fast",
+        tools=[
+            ToolSpec(
+                name="lookup",
+                description="Lookup data",
+                input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+            )
+        ],
+        reasoning=ReasoningConfig(effort="medium"),
+    )
+
+    headers = provider.build_headers(model, request, RequestOptions())
+    payload = provider.build_payload(model, request, RequestOptions())
+
+    assert "fast-mode-2026-02-01" in headers["anthropic-beta"]
+    assert "fine-grained-tool-streaming-2025-05-14" in headers["anthropic-beta"]
+    assert "interleaved-thinking-2025-05-14" in headers["anthropic-beta"]
+    assert payload["speed"] == "fast"
+
+
 def test_anthropic_build_payload_batches_consecutive_tool_results() -> None:
     provider = AnthropicProvider()
     model = _anthropic_model()

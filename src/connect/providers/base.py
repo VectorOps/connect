@@ -176,6 +176,55 @@ class BaseProviderAdapter:
                 return candidate
         return payload
 
+    def processing_mode_config(
+        self,
+        model: ModelSpec,
+        request: GenerateRequest,
+    ) -> dict[str, typing.Any] | None:
+        mode = request.processing_mode
+        if mode in {None, "default"}:
+            return None
+
+        processing_modes = model.capabilities.get("processing_modes")
+        if not isinstance(processing_modes, dict):
+            return None
+
+        mode_config = processing_modes.get(mode)
+        return mode_config if isinstance(mode_config, dict) else None
+
+    def processing_mode_headers(
+        self,
+        model: ModelSpec,
+        request: GenerateRequest,
+    ) -> dict[str, str]:
+        mode_config = self.processing_mode_config(model, request)
+        if mode_config is None:
+            return {}
+
+        headers = mode_config.get("headers")
+        if not isinstance(headers, dict):
+            return {}
+
+        return {str(key): str(value) for key, value in headers.items()}
+
+    def apply_processing_mode_payload(
+        self,
+        payload: dict[str, typing.Any],
+        *,
+        model: ModelSpec,
+        request: GenerateRequest,
+    ) -> None:
+        mode_config = self.processing_mode_config(model, request)
+        if mode_config is None:
+            return
+
+        body = mode_config.get("body")
+        if not isinstance(body, dict):
+            return
+
+        for key, value in body.items():
+            payload.setdefault(str(key), value)
+
     def map_tool_choice(self, tool_choice: str | SpecificToolChoice | None) -> typing.Any:
         if tool_choice is None:
             return None

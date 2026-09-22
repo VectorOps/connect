@@ -51,6 +51,25 @@ class AnthropicProvider(BaseProviderAdapter):
         if beta_features:
             headers["anthropic-beta"] = ",".join(beta_features)
 
+        mode_headers = self.processing_mode_headers(model, request)
+        for header_name, header_value in mode_headers.items():
+            if header_name.lower() == "anthropic-beta" and "anthropic-beta" in headers:
+                merged_values = [
+                    value
+                    for value in (
+                        *(item.strip() for item in headers["anthropic-beta"].split(",")),
+                        *(item.strip() for item in header_value.split(",")),
+                    )
+                    if value
+                ]
+                deduplicated: list[str] = []
+                for value in merged_values:
+                    if value not in deduplicated:
+                        deduplicated.append(value)
+                headers["anthropic-beta"] = ",".join(deduplicated)
+                continue
+            headers[header_name] = header_value
+
         default_headers = model.protocol_defaults.get("headers")
         if isinstance(default_headers, dict):
             headers.update(
@@ -155,9 +174,11 @@ class AnthropicProvider(BaseProviderAdapter):
             if tool_choice is not None:
                 payload["tool_choice"] = tool_choice
 
-        for option_name in ("service_tier", "stop_sequences"):
+        for option_name in ("service_tier", "speed", "stop_sequences"):
             if option_name in options.provider_options and option_name not in payload:
                 payload[option_name] = options.provider_options[option_name]
+
+        self.apply_processing_mode_payload(payload, model=model, request=request)
 
         protocol_defaults = model.protocol_defaults
         for option_name, option_value in protocol_defaults.items():

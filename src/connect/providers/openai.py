@@ -104,6 +104,7 @@ class OpenAIProvider(BaseProviderAdapter):
             headers.update(
                 {str(key): str(value) for key, value in default_headers.items()}
             )
+        headers.update(self.processing_mode_headers(model, request))
         return headers
 
     def build_error(
@@ -207,6 +208,8 @@ class OpenAIProvider(BaseProviderAdapter):
         ):
             if option_name in options.provider_options:
                 payload[option_name] = options.provider_options[option_name]
+
+        self.apply_processing_mode_payload(payload, model=model, request=request)
 
         if (
             request.session

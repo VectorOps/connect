@@ -177,6 +177,51 @@ def test_chatgpt_build_payload_removes_excluded_parameters() -> None:
     assert "temperature" not in payload
 
 
+def test_openai_build_payload_applies_fast_processing_mode_when_supported() -> None:
+    provider = OpenAIProvider()
+    model = _openai_model(
+        capabilities={
+            "supports_developer_role": True,
+            "processing_modes": {
+                "fast": {"body": {"service_tier": "priority"}}
+            },
+        }
+    )
+    request = GenerateRequest(
+        messages=[UserMessage(content="Hello")],
+        processing_mode="fast",
+    )
+
+    payload = provider.build_payload(model, request, RequestOptions())
+
+    assert payload["service_tier"] == "priority"
+
+
+def test_chatgpt_build_payload_applies_fast_processing_mode_when_supported() -> None:
+    from connect.providers import ChatGPTProvider
+
+    provider = ChatGPTProvider()
+    model = _openai_model(
+        provider="chatgpt",
+        model="gpt-5.6-sol",
+        api_family="chatgpt-responses",
+        base_url="https://chatgpt.com/backend-api",
+        capabilities={
+            "processing_modes": {
+                "fast": {"body": {"service_tier": "priority"}}
+            }
+        },
+    )
+    request = GenerateRequest(
+        messages=[UserMessage(content="Hello")],
+        processing_mode="fast",
+    )
+
+    payload = provider.build_payload(model, request, RequestOptions())
+
+    assert payload["service_tier"] == "priority"
+
+
 def test_openai_build_payload_serializes_multimodal_history_and_controls() -> None:
     provider = OpenAIProvider()
     model = _openai_model()
