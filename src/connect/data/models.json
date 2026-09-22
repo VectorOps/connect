@@ -1295,6 +1295,114 @@
     },
     {
       "provider": "openai",
+      "model": "gpt-6-luna",
+      "api_family": "openai-responses",
+      "base_url": "https://api.openai.com/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": true,
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "pricing": {
+        "input_per_million": "0.1",
+        "output_per_million": "0.5",
+        "cache_read_per_million": "0.01",
+        "cache_write_per_million": "0.125"
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true,
+        "processing_modes": {
+          "fast": {
+            "body": {
+              "service_tier": "priority"
+            },
+            "pricing": {
+              "input_per_million": "0.2",
+              "output_per_million": "1",
+              "cache_read_per_million": "0.02",
+              "cache_write_per_million": "0.25"
+            }
+          },
+          "pro": {
+            "body": {
+              "reasoning": {
+                "mode": "pro"
+              }
+            }
+          }
+        }
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "gpt-luna",
+        "source_provider": "openai",
+        "source_model_id": "gpt-6-luna",
+        "source_name": "GPT-6 Luna"
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6-sol",
+      "api_family": "openai-responses",
+      "base_url": "https://api.openai.com/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": true,
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "pricing": {
+        "input_per_million": "2",
+        "output_per_million": "10",
+        "cache_read_per_million": "0.2",
+        "cache_write_per_million": "2.5"
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true,
+        "processing_modes": {
+          "fast": {
+            "body": {
+              "service_tier": "priority"
+            },
+            "pricing": {
+              "input_per_million": "4",
+              "output_per_million": "20",
+              "cache_read_per_million": "0.4",
+              "cache_write_per_million": "5"
+            }
+          },
+          "pro": {
+            "body": {
+              "reasoning": {
+                "mode": "pro"
+              }
+            }
+          }
+        }
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "gpt-sol",
+        "source_provider": "openai",
+        "source_model_id": "gpt-6-sol",
+        "source_name": "GPT-6 Sol"
+      }
+    },
+    {
+      "provider": "openai",
       "model": "gpt-image-1-mini",
       "api_family": "openai-responses",
       "base_url": "https://api.openai.com/v1",
@@ -4940,9 +5048,9 @@
       "context_window": 1048576,
       "max_output_tokens": 384000,
       "pricing": {
-        "input_per_million": "0.915936",
-        "output_per_million": "1.831872",
-        "cache_read_per_million": "0.076328",
+        "input_per_million": "0.904104",
+        "output_per_million": "1.808208",
+        "cache_read_per_million": "0.075342",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -10503,6 +10611,142 @@
     },
     {
       "provider": "openrouter",
+      "model": "openai/gpt-6-luna",
+      "api_family": "openai-responses",
+      "base_url": "https://openrouter.ai/api/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": true,
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "pricing": {
+        "input_per_million": "0.1",
+        "output_per_million": "0.5",
+        "cache_read_per_million": "0.01",
+        "cache_write_per_million": "0.125"
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "gpt",
+        "source_provider": "openrouter",
+        "source_model_id": "openai/gpt-6-luna",
+        "source_name": "GPT-6 Luna"
+      }
+    },
+    {
+      "provider": "openrouter",
+      "model": "openai/gpt-6-luna-pro",
+      "api_family": "openai-responses",
+      "base_url": "https://openrouter.ai/api/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": true,
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "pricing": {
+        "input_per_million": "0.1",
+        "output_per_million": "0.5",
+        "cache_read_per_million": "0.01",
+        "cache_write_per_million": "0.125"
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "gpt",
+        "source_provider": "openrouter",
+        "source_model_id": "openai/gpt-6-luna-pro",
+        "source_name": "GPT-6 Luna Pro"
+      }
+    },
+    {
+      "provider": "openrouter",
+      "model": "openai/gpt-6-sol",
+      "api_family": "openai-responses",
+      "base_url": "https://openrouter.ai/api/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": true,
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "pricing": {
+        "input_per_million": "2",
+        "output_per_million": "10",
+        "cache_read_per_million": "0.2",
+        "cache_write_per_million": "2.5"
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "gpt",
+        "source_provider": "openrouter",
+        "source_model_id": "openai/gpt-6-sol",
+        "source_name": "GPT-6 Sol"
+      }
+    },
+    {
+      "provider": "openrouter",
+      "model": "openai/gpt-6-sol-pro",
+      "api_family": "openai-responses",
+      "base_url": "https://openrouter.ai/api/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": true,
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "pricing": {
+        "input_per_million": "2",
+        "output_per_million": "10",
+        "cache_read_per_million": "0.2",
+        "cache_write_per_million": "2.5"
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "gpt",
+        "source_provider": "openrouter",
+        "source_model_id": "openai/gpt-6-sol-pro",
+        "source_name": "GPT-6 Sol Pro"
+      }
+    },
+    {
+      "provider": "openrouter",
       "model": "openai/gpt-audio",
       "api_family": "openai-responses",
       "base_url": "https://openrouter.ai/api/v1",
@@ -15494,9 +15738,9 @@
       "context_window": 1048576,
       "max_output_tokens": 393216,
       "pricing": {
-        "input_per_million": "0.5544",
-        "output_per_million": "1.6632",
-        "cache_read_per_million": "0.01764",
+        "input_per_million": "0.54384",
+        "output_per_million": "1.63152",
+        "cache_read_per_million": "0.017304",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -15698,10 +15942,10 @@
       "context_window": 1050000,
       "max_output_tokens": 128000,
       "pricing": {
-        "input_per_million": "0.2",
-        "output_per_million": "1.2",
-        "cache_read_per_million": "0.02",
-        "cache_write_per_million": "0.25"
+        "input_per_million": "0.1",
+        "output_per_million": "0.5",
+        "cache_read_per_million": "0.01",
+        "cache_write_per_million": "0.125"
       },
       "capabilities": {
         "supports_developer_role": true,
