@@ -1403,6 +1403,128 @@
     },
     {
       "provider": "openai",
+      "model": "gpt-6.1-sol",
+      "api_family": "openai-responses",
+      "base_url": "https://api.openai.com/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": true,
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "pricing": {
+        "input_per_million": "2",
+        "output_per_million": "10",
+        "cache_read_per_million": "0.1",
+        "cache_write_per_million": "2.5"
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true,
+        "processing_modes": {
+          "fast": {
+            "body": {
+              "service_tier": "priority"
+            },
+            "pricing": {
+              "input_per_million": "4",
+              "output_per_million": "20",
+              "cache_read_per_million": "0.2",
+              "cache_write_per_million": "5"
+            }
+          },
+          "pro": {
+            "body": {
+              "reasoning": {
+                "mode": "pro"
+              }
+            }
+          }
+        }
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "gpt-sol",
+        "source_provider": "openai",
+        "source_model_id": "gpt-6.1-sol",
+        "source_name": "GPT-6.1 Sol"
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-daybreak-blue-latest",
+      "api_family": "openai-responses",
+      "base_url": "https://api.openai.com/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": true,
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "pricing": {
+        "input_per_million": "4",
+        "output_per_million": "20",
+        "cache_read_per_million": "0.4",
+        "cache_write_per_million": "5"
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "gpt-sol",
+        "source_provider": "openai",
+        "source_model_id": "gpt-daybreak-blue-latest",
+        "source_name": "Daybreak Blue"
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-daybreak-red-latest",
+      "api_family": "openai-responses",
+      "base_url": "https://api.openai.com/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": true,
+      "context_window": 400000,
+      "max_output_tokens": 128000,
+      "pricing": {
+        "input_per_million": "12.5",
+        "output_per_million": "75",
+        "cache_read_per_million": "1.25",
+        "cache_write_per_million": "15.625"
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "gpt",
+        "source_provider": "openai",
+        "source_model_id": "gpt-daybreak-red-latest",
+        "source_name": "Daybreak Red"
+      }
+    },
+    {
+      "provider": "openai",
       "model": "gpt-image-1-mini",
       "api_family": "openai-responses",
       "base_url": "https://api.openai.com/v1",
@@ -2324,6 +2446,40 @@
       }
     },
     {
+      "provider": "anthropic",
+      "model": "claude-sonnet-5-5",
+      "api_family": "anthropic-messages",
+      "base_url": "https://api.anthropic.com/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": true,
+      "context_window": 1000000,
+      "max_output_tokens": 128000,
+      "pricing": {
+        "input_per_million": "2",
+        "output_per_million": "10",
+        "cache_read_per_million": "0.2",
+        "cache_write_per_million": "2.5"
+      },
+      "capabilities": {
+        "supports_developer_role": false,
+        "requires_explicit_reasoning_disable": true,
+        "usage_final_only": true,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "claude-sonnet",
+        "source_provider": "anthropic",
+        "source_model_id": "claude-sonnet-5-5",
+        "source_name": "Claude Sonnet 5.5"
+      }
+    },
+    {
       "provider": "gemini",
       "model": "gemini-2.5-computer-use-preview-10-2025",
       "api_family": "gemini-generate-content",
@@ -2335,8 +2491,8 @@
       "supports_image_outputs": false,
       "supports_json_mode": false,
       "supports_prompt_caching": false,
-      "context_window": 131072,
-      "max_output_tokens": 65536,
+      "context_window": 128000,
+      "max_output_tokens": 64000,
       "pricing": {
         "input_per_million": "1.25",
         "output_per_million": "10",
@@ -2539,7 +2695,7 @@
       "supports_image_outputs": true,
       "supports_json_mode": false,
       "supports_prompt_caching": false,
-      "context_window": 131072,
+      "context_window": 65536,
       "max_output_tokens": 32768,
       "pricing": {
         "input_per_million": "2",
@@ -2607,8 +2763,8 @@
       "supports_image_outputs": true,
       "supports_json_mode": false,
       "supports_prompt_caching": false,
-      "context_window": 65536,
-      "max_output_tokens": 65536,
+      "context_window": 131072,
+      "max_output_tokens": 32768,
       "pricing": {
         "input_per_million": "0.5",
         "output_per_million": "60",
@@ -2710,7 +2866,7 @@
       "supports_json_mode": false,
       "supports_prompt_caching": false,
       "context_window": 65536,
-      "max_output_tokens": 65536,
+      "max_output_tokens": 4096,
       "pricing": {
         "input_per_million": "0.25",
         "output_per_million": "30",
@@ -3277,7 +3433,7 @@
       "supports_image_outputs": false,
       "supports_json_mode": false,
       "supports_prompt_caching": true,
-      "context_window": 1048576,
+      "context_window": 131072,
       "max_output_tokens": 32768,
       "pricing": {
         "input_per_million": "0.8",
@@ -3311,7 +3467,7 @@
       "supports_image_outputs": false,
       "supports_json_mode": false,
       "supports_prompt_caching": true,
-      "context_window": 1048576,
+      "context_window": 131072,
       "max_output_tokens": 32768,
       "pricing": {
         "input_per_million": "3",
@@ -3345,7 +3501,7 @@
       "supports_image_outputs": false,
       "supports_json_mode": false,
       "supports_prompt_caching": true,
-      "context_window": 1048576,
+      "context_window": 131072,
       "max_output_tokens": 32768,
       "pricing": {
         "input_per_million": "0.7",
@@ -3365,6 +3521,74 @@
         "source_provider": "openrouter",
         "source_model_id": "aion-labs/aion-3.0-mini",
         "source_name": "Aion-3.0-Mini"
+      }
+    },
+    {
+      "provider": "openrouter",
+      "model": "aion-labs/aion-3.5",
+      "api_family": "openai-responses",
+      "base_url": "https://openrouter.ai/api/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": false,
+      "supports_image_outputs": false,
+      "supports_json_mode": false,
+      "supports_prompt_caching": true,
+      "context_window": 262144,
+      "max_output_tokens": 32768,
+      "pricing": {
+        "input_per_million": "3",
+        "output_per_million": "6",
+        "cache_read_per_million": "0.75",
+        "cache_write_per_million": null
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": null,
+        "source_provider": "openrouter",
+        "source_model_id": "aion-labs/aion-3.5",
+        "source_name": "Aion 3.5"
+      }
+    },
+    {
+      "provider": "openrouter",
+      "model": "aion-labs/aion-3.5-mini",
+      "api_family": "openai-responses",
+      "base_url": "https://openrouter.ai/api/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": false,
+      "supports_image_outputs": false,
+      "supports_json_mode": false,
+      "supports_prompt_caching": true,
+      "context_window": 262144,
+      "max_output_tokens": 32768,
+      "pricing": {
+        "input_per_million": "0.7",
+        "output_per_million": "1.4",
+        "cache_read_per_million": "0.18",
+        "cache_write_per_million": null
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": null,
+        "source_provider": "openrouter",
+        "source_model_id": "aion-labs/aion-3.5-mini",
+        "source_name": "Aion 3.5 Mini"
       }
     },
     {
@@ -3603,40 +3827,6 @@
         "source_provider": "openrouter",
         "source_model_id": "anthracite-org/magnum-v4-72b",
         "source_name": "Magnum v4 72B"
-      }
-    },
-    {
-      "provider": "openrouter",
-      "model": "anthropic/claude-3-haiku",
-      "api_family": "openai-responses",
-      "base_url": "https://openrouter.ai/api/v1",
-      "supports_streaming": true,
-      "supports_tools": true,
-      "supports_reasoning": false,
-      "supports_images": true,
-      "supports_image_outputs": false,
-      "supports_json_mode": false,
-      "supports_prompt_caching": true,
-      "context_window": 200000,
-      "max_output_tokens": 4096,
-      "pricing": {
-        "input_per_million": "0.25",
-        "output_per_million": "1.25",
-        "cache_read_per_million": "0.03",
-        "cache_write_per_million": "0.3"
-      },
-      "capabilities": {
-        "supports_developer_role": true,
-        "requires_explicit_reasoning_disable": false,
-        "usage_final_only": false,
-        "supports_parallel_tool_calls": true
-      },
-      "protocol_defaults": {},
-      "extra": {
-        "family": "claude",
-        "source_provider": "openrouter",
-        "source_model_id": "anthropic/claude-3-haiku",
-        "source_name": "Claude 3 Haiku"
       }
     },
     {
@@ -4117,6 +4307,40 @@
     },
     {
       "provider": "openrouter",
+      "model": "anthropic/claude-sonnet-5.5",
+      "api_family": "openai-responses",
+      "base_url": "https://openrouter.ai/api/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": true,
+      "context_window": 1000000,
+      "max_output_tokens": 128000,
+      "pricing": {
+        "input_per_million": "2",
+        "output_per_million": "10",
+        "cache_read_per_million": "0.2",
+        "cache_write_per_million": "2.5"
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "claude-sonnet",
+        "source_provider": "openrouter",
+        "source_model_id": "anthropic/claude-sonnet-5.5",
+        "source_name": "Claude Sonnet 5.5"
+      }
+    },
+    {
+      "provider": "openrouter",
       "model": "arcee-ai/trinity-large-thinking",
       "api_family": "openai-responses",
       "base_url": "https://openrouter.ai/api/v1",
@@ -4491,6 +4715,40 @@
     },
     {
       "provider": "openrouter",
+      "model": "cohere/command-a-plus",
+      "api_family": "openai-responses",
+      "base_url": "https://openrouter.ai/api/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": true,
+      "context_window": 192000,
+      "max_output_tokens": 64000,
+      "pricing": {
+        "input_per_million": "0.3",
+        "output_per_million": "1.5",
+        "cache_read_per_million": "0.15",
+        "cache_write_per_million": null
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "command-a",
+        "source_provider": "openrouter",
+        "source_model_id": "cohere/command-a-plus",
+        "source_name": "Command A+"
+      }
+    },
+    {
+      "provider": "openrouter",
       "model": "cohere/command-r-08-2024",
       "api_family": "openai-responses",
       "base_url": "https://openrouter.ai/api/v1",
@@ -4638,10 +4896,10 @@
       "supports_json_mode": true,
       "supports_prompt_caching": false,
       "context_window": 163840,
-      "max_output_tokens": 16384,
+      "max_output_tokens": 16000,
       "pricing": {
-        "input_per_million": "0.32",
-        "output_per_million": "0.89",
+        "input_per_million": "0.2574",
+        "output_per_million": "1.0287",
         "cache_read_per_million": null,
         "cache_write_per_million": null
       },
@@ -4670,13 +4928,13 @@
       "supports_images": false,
       "supports_image_outputs": false,
       "supports_json_mode": true,
-      "supports_prompt_caching": false,
+      "supports_prompt_caching": true,
       "context_window": 163840,
       "max_output_tokens": 147456,
       "pricing": {
-        "input_per_million": "0.25",
-        "output_per_million": "1",
-        "cache_read_per_million": null,
+        "input_per_million": "0.29",
+        "output_per_million": "1.14",
+        "cache_read_per_million": "0.11",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -4797,40 +5055,6 @@
     },
     {
       "provider": "openrouter",
-      "model": "deepseek/deepseek-r1-distill-llama-70b",
-      "api_family": "openai-responses",
-      "base_url": "https://openrouter.ai/api/v1",
-      "supports_streaming": true,
-      "supports_tools": false,
-      "supports_reasoning": true,
-      "supports_images": false,
-      "supports_image_outputs": false,
-      "supports_json_mode": false,
-      "supports_prompt_caching": false,
-      "context_window": 8192,
-      "max_output_tokens": 7372,
-      "pricing": {
-        "input_per_million": "0.8",
-        "output_per_million": "0.8",
-        "cache_read_per_million": null,
-        "cache_write_per_million": null
-      },
-      "capabilities": {
-        "supports_developer_role": true,
-        "requires_explicit_reasoning_disable": false,
-        "usage_final_only": false,
-        "supports_parallel_tool_calls": false
-      },
-      "protocol_defaults": {},
-      "extra": {
-        "family": "deepseek-thinking",
-        "source_provider": "openrouter",
-        "source_model_id": "deepseek/deepseek-r1-distill-llama-70b",
-        "source_name": "R1 Distill Llama 70B"
-      }
-    },
-    {
-      "provider": "openrouter",
       "model": "deepseek/deepseek-v3.1-terminus",
       "api_family": "openai-responses",
       "base_url": "https://openrouter.ai/api/v1",
@@ -4842,9 +5066,9 @@
       "supports_json_mode": true,
       "supports_prompt_caching": true,
       "context_window": 163840,
-      "max_output_tokens": 32768,
+      "max_output_tokens": 65536,
       "pricing": {
-        "input_per_million": "0.27",
+        "input_per_million": "0.3",
         "output_per_million": "1",
         "cache_read_per_million": "0.135",
         "cache_write_per_million": null
@@ -4878,9 +5102,9 @@
       "context_window": 163840,
       "max_output_tokens": 65536,
       "pricing": {
-        "input_per_million": "0.269",
-        "output_per_million": "0.4",
-        "cache_read_per_million": "0.1345",
+        "input_per_million": "0.28",
+        "output_per_million": "0.42",
+        "cache_read_per_million": "0.028",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -4910,7 +5134,7 @@
       "supports_json_mode": true,
       "supports_prompt_caching": false,
       "context_window": 163840,
-      "max_output_tokens": 65536,
+      "max_output_tokens": 147456,
       "pricing": {
         "input_per_million": "0.27",
         "output_per_million": "0.41",
@@ -4944,11 +5168,11 @@
       "supports_json_mode": true,
       "supports_prompt_caching": true,
       "context_window": 1048576,
-      "max_output_tokens": 384000,
+      "max_output_tokens": 131072,
       "pricing": {
-        "input_per_million": "0.049",
-        "output_per_million": "0.098",
-        "cache_read_per_million": "0.0098",
+        "input_per_million": "0.08008",
+        "output_per_million": "0.16016",
+        "cache_read_per_million": "0.016016",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -4977,12 +5201,12 @@
       "supports_image_outputs": false,
       "supports_json_mode": true,
       "supports_prompt_caching": true,
-      "context_window": 1310720,
+      "context_window": 1048576,
       "max_output_tokens": 943718,
       "pricing": {
-        "input_per_million": "0.04",
-        "output_per_million": "0.64",
-        "cache_read_per_million": "0.016",
+        "input_per_million": "0.01",
+        "output_per_million": "1.28",
+        "cache_read_per_million": "0.01",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -5012,11 +5236,11 @@
       "supports_json_mode": true,
       "supports_prompt_caching": true,
       "context_window": 1048576,
-      "max_output_tokens": 943718,
+      "max_output_tokens": 262144,
       "pricing": {
-        "input_per_million": "0.22",
-        "output_per_million": "0.66",
-        "cache_read_per_million": "0.007",
+        "input_per_million": "0.2156",
+        "output_per_million": "0.6468",
+        "cache_read_per_million": "0.00686",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -5048,9 +5272,9 @@
       "context_window": 1048576,
       "max_output_tokens": 384000,
       "pricing": {
-        "input_per_million": "0.904104",
-        "output_per_million": "1.808208",
-        "cache_read_per_million": "0.075342",
+        "input_per_million": "0.783",
+        "output_per_million": "1.566",
+        "cache_read_per_million": "0.06525",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -5080,7 +5304,7 @@
       "supports_json_mode": true,
       "supports_prompt_caching": true,
       "context_window": 1048576,
-      "max_output_tokens": 384000,
+      "max_output_tokens": 393216,
       "pricing": {
         "input_per_million": "0.66",
         "output_per_million": "1.98",
@@ -5114,11 +5338,11 @@
       "supports_json_mode": true,
       "supports_prompt_caching": true,
       "context_window": 1048576,
-      "max_output_tokens": 384000,
+      "max_output_tokens": 943718,
       "pricing": {
-        "input_per_million": "0.15",
-        "output_per_million": "0.6",
-        "cache_read_per_million": "0.003",
+        "input_per_million": "0.0198",
+        "output_per_million": "0.396",
+        "cache_read_per_million": "0.00291",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -5167,6 +5391,40 @@
         "source_provider": "openrouter",
         "source_model_id": "dots-studio/dots-3-note-preview:free",
         "source_name": "Dots3-Note Preview (free)"
+      }
+    },
+    {
+      "provider": "openrouter",
+      "model": "fireworks/ember-1",
+      "api_family": "openai-responses",
+      "base_url": "https://openrouter.ai/api/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": true,
+      "context_window": 1048576,
+      "max_output_tokens": 943718,
+      "pricing": {
+        "input_per_million": "3",
+        "output_per_million": "15",
+        "cache_read_per_million": "0.3",
+        "cache_write_per_million": null
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": null,
+        "source_provider": "openrouter",
+        "source_model_id": "fireworks/ember-1",
+        "source_name": "Ember-1"
       }
     },
     {
@@ -6429,40 +6687,6 @@
     },
     {
       "provider": "openrouter",
-      "model": "inclusionai/ling-3.0-flash-fin:free",
-      "api_family": "openai-responses",
-      "base_url": "https://openrouter.ai/api/v1",
-      "supports_streaming": true,
-      "supports_tools": true,
-      "supports_reasoning": true,
-      "supports_images": false,
-      "supports_image_outputs": false,
-      "supports_json_mode": false,
-      "supports_prompt_caching": false,
-      "context_window": 262144,
-      "max_output_tokens": 32768,
-      "pricing": {
-        "input_per_million": "0",
-        "output_per_million": "0",
-        "cache_read_per_million": null,
-        "cache_write_per_million": null
-      },
-      "capabilities": {
-        "supports_developer_role": true,
-        "requires_explicit_reasoning_disable": false,
-        "usage_final_only": false,
-        "supports_parallel_tool_calls": true
-      },
-      "protocol_defaults": {},
-      "extra": {
-        "family": "ling",
-        "source_provider": "openrouter",
-        "source_model_id": "inclusionai/ling-3.0-flash-fin:free",
-        "source_name": "Ling 3.0 Flash Fin (free)"
-      }
-    },
-    {
-      "provider": "openrouter",
       "model": "inclusionai/ling-3.0-flash-sante:free",
       "api_family": "openai-responses",
       "base_url": "https://openrouter.ai/api/v1",
@@ -6507,12 +6731,12 @@
       "supports_image_outputs": false,
       "supports_json_mode": true,
       "supports_prompt_caching": true,
-      "context_window": 131072,
+      "context_window": 262144,
       "max_output_tokens": 32768,
       "pricing": {
-        "input_per_million": "0.06",
-        "output_per_million": "0.18",
-        "cache_read_per_million": "0.012",
+        "input_per_million": "0.021",
+        "output_per_million": "0.0616",
+        "cache_read_per_million": "0.0042",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -6527,40 +6751,6 @@
         "source_provider": "openrouter",
         "source_model_id": "inclusionai/ling-3.0-flash-vl",
         "source_name": "Ling 3.0 Flash VL"
-      }
-    },
-    {
-      "provider": "openrouter",
-      "model": "inclusionai/ling-3.0-flash-vl:free",
-      "api_family": "openai-responses",
-      "base_url": "https://openrouter.ai/api/v1",
-      "supports_streaming": true,
-      "supports_tools": true,
-      "supports_reasoning": true,
-      "supports_images": true,
-      "supports_image_outputs": false,
-      "supports_json_mode": false,
-      "supports_prompt_caching": false,
-      "context_window": 262144,
-      "max_output_tokens": 32768,
-      "pricing": {
-        "input_per_million": "0",
-        "output_per_million": "0",
-        "cache_read_per_million": null,
-        "cache_write_per_million": null
-      },
-      "capabilities": {
-        "supports_developer_role": true,
-        "requires_explicit_reasoning_disable": false,
-        "usage_final_only": false,
-        "supports_parallel_tool_calls": true
-      },
-      "protocol_defaults": {},
-      "extra": {
-        "family": "ling",
-        "source_provider": "openrouter",
-        "source_model_id": "inclusionai/ling-3.0-flash-vl:free",
-        "source_name": "Ling 3.0 Flash VL (free)"
       }
     },
     {
@@ -7052,10 +7242,10 @@
       "supports_json_mode": true,
       "supports_prompt_caching": true,
       "context_window": 131072,
-      "max_output_tokens": 16384,
+      "max_output_tokens": 117964,
       "pricing": {
-        "input_per_million": "0.3",
-        "output_per_million": "1.2",
+        "input_per_million": "0.35",
+        "output_per_million": "1.5",
         "cache_read_per_million": "0.04",
         "cache_write_per_million": null
       },
@@ -7324,7 +7514,7 @@
       "supports_json_mode": false,
       "supports_prompt_caching": false,
       "context_window": 1000192,
-      "max_output_tokens": 900172,
+      "max_output_tokens": 40000,
       "pricing": {
         "input_per_million": "0.2",
         "output_per_million": "1.1",
@@ -7392,10 +7582,10 @@
       "supports_json_mode": true,
       "supports_prompt_caching": false,
       "context_window": 204800,
-      "max_output_tokens": 131072,
+      "max_output_tokens": 176947,
       "pricing": {
-        "input_per_million": "0.255",
-        "output_per_million": "1.02",
+        "input_per_million": "0.3",
+        "output_per_million": "1.2",
         "cache_read_per_million": null,
         "cache_write_per_million": null
       },
@@ -7528,11 +7718,11 @@
       "supports_json_mode": true,
       "supports_prompt_caching": true,
       "context_window": 204800,
-      "max_output_tokens": 131072,
+      "max_output_tokens": 176947,
       "pricing": {
-        "input_per_million": "0.3",
-        "output_per_million": "1.2",
-        "cache_read_per_million": "0.06",
+        "input_per_million": "0.21",
+        "output_per_million": "0.84",
+        "cache_read_per_million": "0.042",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -7819,6 +8009,40 @@
         "source_provider": "openrouter",
         "source_model_id": "mistralai/mistral-large-2407",
         "source_name": "Mistral Large 2407"
+      }
+    },
+    {
+      "provider": "openrouter",
+      "model": "mistralai/mistral-large-2512",
+      "api_family": "openai-responses",
+      "base_url": "https://openrouter.ai/api/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": false,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": true,
+      "context_window": 262144,
+      "max_output_tokens": 209715,
+      "pricing": {
+        "input_per_million": "0.5",
+        "output_per_million": "1.5",
+        "cache_read_per_million": "0.05",
+        "cache_write_per_million": null
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "mistral-large",
+        "source_provider": "openrouter",
+        "source_model_id": "mistralai/mistral-large-2512",
+        "source_name": "Mistral Large 3"
       }
     },
     {
@@ -8346,9 +8570,9 @@
       "context_window": 262144,
       "max_output_tokens": 235929,
       "pricing": {
-        "input_per_million": "0.95",
-        "output_per_million": "4",
-        "cache_read_per_million": "0.16",
+        "input_per_million": "0.65",
+        "output_per_million": "3.41",
+        "cache_read_per_million": "0.15",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -8380,8 +8604,8 @@
       "context_window": 262144,
       "max_output_tokens": 235929,
       "pricing": {
-        "input_per_million": "0.7062",
-        "output_per_million": "3.3",
+        "input_per_million": "0.6712",
+        "output_per_million": "3.35",
         "cache_read_per_million": "0.18",
         "cache_write_per_million": null
       },
@@ -8537,40 +8761,6 @@
     },
     {
       "provider": "openrouter",
-      "model": "nex-agi/nex-n2.5-mini:free",
-      "api_family": "openai-responses",
-      "base_url": "https://openrouter.ai/api/v1",
-      "supports_streaming": true,
-      "supports_tools": true,
-      "supports_reasoning": true,
-      "supports_images": true,
-      "supports_image_outputs": false,
-      "supports_json_mode": true,
-      "supports_prompt_caching": false,
-      "context_window": 262144,
-      "max_output_tokens": 235929,
-      "pricing": {
-        "input_per_million": "0",
-        "output_per_million": "0",
-        "cache_read_per_million": null,
-        "cache_write_per_million": null
-      },
-      "capabilities": {
-        "supports_developer_role": true,
-        "requires_explicit_reasoning_disable": false,
-        "usage_final_only": false,
-        "supports_parallel_tool_calls": true
-      },
-      "protocol_defaults": {},
-      "extra": {
-        "family": "agi",
-        "source_provider": "openrouter",
-        "source_model_id": "nex-agi/nex-n2.5-mini:free",
-        "source_name": "Nex-N2.5-Mini (free)"
-      }
-    },
-    {
-      "provider": "openrouter",
       "model": "nex-agi/nex-n2.5-pro",
       "api_family": "openai-responses",
       "base_url": "https://openrouter.ai/api/v1",
@@ -8601,40 +8791,6 @@
         "source_provider": "openrouter",
         "source_model_id": "nex-agi/nex-n2.5-pro",
         "source_name": "Nex-N2.5-Pro"
-      }
-    },
-    {
-      "provider": "openrouter",
-      "model": "nex-agi/nex-n2.5-pro:free",
-      "api_family": "openai-responses",
-      "base_url": "https://openrouter.ai/api/v1",
-      "supports_streaming": true,
-      "supports_tools": true,
-      "supports_reasoning": true,
-      "supports_images": true,
-      "supports_image_outputs": false,
-      "supports_json_mode": true,
-      "supports_prompt_caching": false,
-      "context_window": 262144,
-      "max_output_tokens": 235929,
-      "pricing": {
-        "input_per_million": "0",
-        "output_per_million": "0",
-        "cache_read_per_million": null,
-        "cache_write_per_million": null
-      },
-      "capabilities": {
-        "supports_developer_role": true,
-        "requires_explicit_reasoning_disable": false,
-        "usage_final_only": false,
-        "supports_parallel_tool_calls": true
-      },
-      "protocol_defaults": {},
-      "extra": {
-        "family": "agi",
-        "source_provider": "openrouter",
-        "source_model_id": "nex-agi/nex-n2.5-pro:free",
-        "source_name": "Nex-N2.5-Pro (free)"
       }
     },
     {
@@ -9024,11 +9180,11 @@
       "supports_json_mode": true,
       "supports_prompt_caching": true,
       "context_window": 262144,
-      "max_output_tokens": 235929,
+      "max_output_tokens": 32768,
       "pricing": {
-        "input_per_million": "0.07",
-        "output_per_million": "0.2",
-        "cache_read_per_million": "0.04",
+        "input_per_million": "0.06",
+        "output_per_million": "0.16",
+        "cache_read_per_million": "0.03",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -10454,10 +10610,10 @@
       "context_window": 1050000,
       "max_output_tokens": 128000,
       "pricing": {
-        "input_per_million": "2",
-        "output_per_million": "10",
-        "cache_read_per_million": "0.2",
-        "cache_write_per_million": "2.5"
+        "input_per_million": "4",
+        "output_per_million": "20",
+        "cache_read_per_million": "0.4",
+        "cache_write_per_million": "5"
       },
       "capabilities": {
         "supports_developer_role": true,
@@ -10637,7 +10793,7 @@
       },
       "protocol_defaults": {},
       "extra": {
-        "family": "gpt",
+        "family": "gpt-luna",
         "source_provider": "openrouter",
         "source_model_id": "openai/gpt-6-luna",
         "source_name": "GPT-6 Luna"
@@ -10705,7 +10861,7 @@
       },
       "protocol_defaults": {},
       "extra": {
-        "family": "gpt",
+        "family": "gpt-sol",
         "source_provider": "openrouter",
         "source_model_id": "openai/gpt-6-sol",
         "source_name": "GPT-6 Sol"
@@ -10743,6 +10899,74 @@
         "source_provider": "openrouter",
         "source_model_id": "openai/gpt-6-sol-pro",
         "source_name": "GPT-6 Sol Pro"
+      }
+    },
+    {
+      "provider": "openrouter",
+      "model": "openai/gpt-6.1-sol",
+      "api_family": "openai-responses",
+      "base_url": "https://openrouter.ai/api/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": true,
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "pricing": {
+        "input_per_million": "2",
+        "output_per_million": "10",
+        "cache_read_per_million": "0.1",
+        "cache_write_per_million": "2.5"
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "gpt-sol",
+        "source_provider": "openrouter",
+        "source_model_id": "openai/gpt-6.1-sol",
+        "source_name": "GPT-6.1 Sol"
+      }
+    },
+    {
+      "provider": "openrouter",
+      "model": "openai/gpt-6.1-sol-pro",
+      "api_family": "openai-responses",
+      "base_url": "https://openrouter.ai/api/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": true,
+      "context_window": 1050000,
+      "max_output_tokens": 128000,
+      "pricing": {
+        "input_per_million": "2",
+        "output_per_million": "10",
+        "cache_read_per_million": "0.1",
+        "cache_write_per_million": "2.5"
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "gpt",
+        "source_provider": "openrouter",
+        "source_model_id": "openai/gpt-6.1-sol-pro",
+        "source_name": "GPT-6.1 Sol Pro"
       }
     },
     {
@@ -10858,13 +11082,13 @@
       "supports_images": false,
       "supports_image_outputs": false,
       "supports_json_mode": true,
-      "supports_prompt_caching": true,
+      "supports_prompt_caching": false,
       "context_window": 131072,
-      "max_output_tokens": 65536,
+      "max_output_tokens": 117964,
       "pricing": {
-        "input_per_million": "0.15",
-        "output_per_million": "0.6",
-        "cache_read_per_million": "0.075",
+        "input_per_million": "0.037",
+        "output_per_million": "0.17",
+        "cache_read_per_million": null,
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -10892,13 +11116,13 @@
       "supports_images": false,
       "supports_image_outputs": false,
       "supports_json_mode": true,
-      "supports_prompt_caching": false,
+      "supports_prompt_caching": true,
       "context_window": 131072,
       "max_output_tokens": 32768,
       "pricing": {
         "input_per_million": "0.018",
         "output_per_million": "0.09",
-        "cache_read_per_million": null,
+        "cache_read_per_million": "0.009",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -11407,6 +11631,40 @@
     },
     {
       "provider": "openrouter",
+      "model": "perceptron/perceptron-mk1.5",
+      "api_family": "openai-responses",
+      "base_url": "https://openrouter.ai/api/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": false,
+      "context_window": 36864,
+      "max_output_tokens": 8192,
+      "pricing": {
+        "input_per_million": "0.15",
+        "output_per_million": "1.5",
+        "cache_read_per_million": null,
+        "cache_write_per_million": null
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": null,
+        "source_provider": "openrouter",
+        "source_model_id": "perceptron/perceptron-mk1.5",
+        "source_name": "Perceptron Mk1.5"
+      }
+    },
+    {
+      "provider": "openrouter",
       "model": "perplexity/sonar",
       "api_family": "openai-responses",
       "base_url": "https://openrouter.ai/api/v1",
@@ -11722,13 +11980,13 @@
       "supports_images": true,
       "supports_image_outputs": false,
       "supports_json_mode": true,
-      "supports_prompt_caching": false,
+      "supports_prompt_caching": true,
       "context_window": 262144,
       "max_output_tokens": 32768,
       "pricing": {
         "input_per_million": "0.075",
         "output_per_million": "0.5",
-        "cache_read_per_million": null,
+        "cache_read_per_million": "0.0375",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -12098,10 +12356,10 @@
       "supports_json_mode": true,
       "supports_prompt_caching": false,
       "context_window": 131072,
-      "max_output_tokens": 16384,
+      "max_output_tokens": 8192,
       "pricing": {
-        "input_per_million": "0.12",
-        "output_per_million": "0.5",
+        "input_per_million": "0.13",
+        "output_per_million": "0.52",
         "cache_read_per_million": null,
         "cache_write_per_million": null
       },
@@ -12504,13 +12762,13 @@
       "supports_images": false,
       "supports_image_outputs": false,
       "supports_json_mode": true,
-      "supports_prompt_caching": false,
+      "supports_prompt_caching": true,
       "context_window": 262144,
-      "max_output_tokens": 16384,
+      "max_output_tokens": 235929,
       "pricing": {
-        "input_per_million": "0.09",
+        "input_per_million": "0.1",
         "output_per_million": "1.1",
-        "cache_read_per_million": null,
+        "cache_read_per_million": "0.07",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -12642,10 +12900,10 @@
       "supports_json_mode": true,
       "supports_prompt_caching": false,
       "context_window": 262144,
-      "max_output_tokens": 32768,
+      "max_output_tokens": 16384,
       "pricing": {
-        "input_per_million": "0.13",
-        "output_per_million": "0.52",
+        "input_per_million": "0.15",
+        "output_per_million": "0.6",
         "cache_read_per_million": null,
         "cache_write_per_million": null
       },
@@ -12878,13 +13136,13 @@
       "supports_images": true,
       "supports_image_outputs": false,
       "supports_json_mode": true,
-      "supports_prompt_caching": true,
+      "supports_prompt_caching": false,
       "context_window": 262144,
-      "max_output_tokens": 16384,
+      "max_output_tokens": 65536,
       "pricing": {
-        "input_per_million": "0.3125",
-        "output_per_million": "1.25",
-        "cache_read_per_million": "0.15625",
+        "input_per_million": "0.1625",
+        "output_per_million": "1.3",
+        "cache_read_per_million": null,
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -13082,13 +13340,13 @@
       "supports_images": true,
       "supports_image_outputs": false,
       "supports_json_mode": true,
-      "supports_prompt_caching": true,
+      "supports_prompt_caching": false,
       "context_window": 262144,
-      "max_output_tokens": 262140,
+      "max_output_tokens": 81920,
       "pricing": {
         "input_per_million": "0.32",
-        "output_per_million": "2.7",
-        "cache_read_per_million": "0.15",
+        "output_per_million": "3.2",
+        "cache_read_per_million": null,
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -13390,11 +13648,11 @@
       "supports_json_mode": true,
       "supports_prompt_caching": true,
       "context_window": 1000000,
-      "max_output_tokens": 131072,
+      "max_output_tokens": 235929,
       "pricing": {
-        "input_per_million": "0.42",
-        "output_per_million": "3",
-        "cache_read_per_million": "0.085",
+        "input_per_million": "0.0249",
+        "output_per_million": "4.35",
+        "cache_read_per_million": "0.0199",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -13511,6 +13769,74 @@
         "source_provider": "openrouter",
         "source_model_id": "qwen/qwen3.8-max-0902",
         "source_name": "Qwen3.8 Max 0902"
+      }
+    },
+    {
+      "provider": "openrouter",
+      "model": "qwen/qwen3.8-max-prime",
+      "api_family": "openai-responses",
+      "base_url": "https://openrouter.ai/api/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": true,
+      "context_window": 1000000,
+      "max_output_tokens": 131072,
+      "pricing": {
+        "input_per_million": "4",
+        "output_per_million": "12",
+        "cache_read_per_million": "0.5",
+        "cache_write_per_million": null
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "qwen3.8-max",
+        "source_provider": "openrouter",
+        "source_model_id": "qwen/qwen3.8-max-prime",
+        "source_name": "Qwen 3.8 Max Prime"
+      }
+    },
+    {
+      "provider": "openrouter",
+      "model": "qwen/qwen3.8-omni-flash",
+      "api_family": "openai-responses",
+      "base_url": "https://openrouter.ai/api/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": true,
+      "context_window": 1000000,
+      "max_output_tokens": 131072,
+      "pricing": {
+        "input_per_million": "0.15",
+        "output_per_million": "0.47",
+        "cache_read_per_million": "0.016",
+        "cache_write_per_million": null
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "qwen",
+        "source_provider": "openrouter",
+        "source_model_id": "qwen/qwen3.8-omni-flash",
+        "source_name": "Qwen3.8 Omni Flash"
       }
     },
     {
@@ -13889,6 +14215,40 @@
     },
     {
       "provider": "openrouter",
+      "model": "stealth/space-bunny-alpha",
+      "api_family": "openai-responses",
+      "base_url": "https://openrouter.ai/api/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": true,
+      "supports_image_outputs": false,
+      "supports_json_mode": false,
+      "supports_prompt_caching": false,
+      "context_window": 1000000,
+      "max_output_tokens": 524288,
+      "pricing": {
+        "input_per_million": "0",
+        "output_per_million": "0",
+        "cache_read_per_million": null,
+        "cache_write_per_million": null
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "alpha",
+        "source_provider": "openrouter",
+        "source_model_id": "stealth/space-bunny-alpha",
+        "source_name": "Space Bunny Alpha"
+      }
+    },
+    {
+      "provider": "openrouter",
       "model": "stepfun/step-3.5-flash",
       "api_family": "openai-responses",
       "base_url": "https://openrouter.ai/api/v1",
@@ -14106,9 +14466,9 @@
       "context_window": 262144,
       "max_output_tokens": 128000,
       "pricing": {
-        "input_per_million": "0.0825",
-        "output_per_million": "0.33",
-        "cache_read_per_million": "0.020625",
+        "input_per_million": "0.132",
+        "output_per_million": "0.528",
+        "cache_read_per_million": "0.033",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -14307,7 +14667,7 @@
       "supports_image_outputs": false,
       "supports_json_mode": false,
       "supports_prompt_caching": true,
-      "context_window": 1048576,
+      "context_window": 524288,
       "max_output_tokens": 471859,
       "pricing": {
         "input_per_million": "1",
@@ -14341,7 +14701,7 @@
       "supports_image_outputs": false,
       "supports_json_mode": false,
       "supports_prompt_caching": true,
-      "context_window": 1048576,
+      "context_window": 524288,
       "max_output_tokens": 262144,
       "pricing": {
         "input_per_million": "0.45",
@@ -14497,6 +14857,40 @@
         "source_provider": "openrouter",
         "source_model_id": "undi95/remm-slerp-l2-13b",
         "source_name": "ReMM SLERP 13B"
+      }
+    },
+    {
+      "provider": "openrouter",
+      "model": "upstage/solar-mini4",
+      "api_family": "openai-responses",
+      "base_url": "https://openrouter.ai/api/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": false,
+      "supports_image_outputs": false,
+      "supports_json_mode": true,
+      "supports_prompt_caching": true,
+      "context_window": 524288,
+      "max_output_tokens": 131072,
+      "pricing": {
+        "input_per_million": "0.05",
+        "output_per_million": "0.2",
+        "cache_read_per_million": "0.005",
+        "cache_write_per_million": null
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "solar",
+        "source_provider": "openrouter",
+        "source_model_id": "upstage/solar-mini4",
+        "source_name": "Solar Mini 4"
       }
     },
     {
@@ -14786,9 +15180,9 @@
       "context_window": 500000,
       "max_output_tokens": 450000,
       "pricing": {
-        "input_per_million": "1.6",
-        "output_per_million": "4.8",
-        "cache_read_per_million": "0.4",
+        "input_per_million": "2",
+        "output_per_million": "6",
+        "cache_read_per_million": "0.5",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -14919,7 +15313,7 @@
       "supports_image_outputs": false,
       "supports_json_mode": true,
       "supports_prompt_caching": true,
-      "context_window": 1048576,
+      "context_window": 1050000,
       "max_output_tokens": 131072,
       "pricing": {
         "input_per_million": "0.14",
@@ -14953,7 +15347,7 @@
       "supports_image_outputs": false,
       "supports_json_mode": true,
       "supports_prompt_caching": true,
-      "context_window": 1048576,
+      "context_window": 1050000,
       "max_output_tokens": 131072,
       "pricing": {
         "input_per_million": "0.435",
@@ -15194,9 +15588,9 @@
       "context_window": 204800,
       "max_output_tokens": 131072,
       "pricing": {
-        "input_per_million": "0.4",
-        "output_per_million": "1.75",
-        "cache_read_per_million": "0.08",
+        "input_per_million": "0.6",
+        "output_per_million": "2.2",
+        "cache_read_per_million": "0.11",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -15328,11 +15722,11 @@
       "supports_json_mode": true,
       "supports_prompt_caching": true,
       "context_window": 204800,
-      "max_output_tokens": 128000,
+      "max_output_tokens": 131072,
       "pricing": {
-        "input_per_million": "0.966",
-        "output_per_million": "3.036",
-        "cache_read_per_million": "0.1794",
+        "input_per_million": "0.9646",
+        "output_per_million": "3.0316",
+        "cache_read_per_million": "0.17914",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -15362,11 +15756,11 @@
       "supports_json_mode": true,
       "supports_prompt_caching": true,
       "context_window": 1048576,
-      "max_output_tokens": 131072,
+      "max_output_tokens": 943718,
       "pricing": {
-        "input_per_million": "0.6496",
-        "output_per_million": "2.0416",
-        "cache_read_per_million": "0.12064",
+        "input_per_million": "0.41",
+        "output_per_million": "3.99",
+        "cache_read_per_million": "0.26",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -15385,40 +15779,6 @@
     },
     {
       "provider": "openrouter",
-      "model": "z-ai/glm-5.2:free",
-      "api_family": "openai-responses",
-      "base_url": "https://openrouter.ai/api/v1",
-      "supports_streaming": true,
-      "supports_tools": false,
-      "supports_reasoning": true,
-      "supports_images": false,
-      "supports_image_outputs": false,
-      "supports_json_mode": false,
-      "supports_prompt_caching": false,
-      "context_window": 32768,
-      "max_output_tokens": 29491,
-      "pricing": {
-        "input_per_million": "0",
-        "output_per_million": "0",
-        "cache_read_per_million": null,
-        "cache_write_per_million": null
-      },
-      "capabilities": {
-        "supports_developer_role": true,
-        "requires_explicit_reasoning_disable": false,
-        "usage_final_only": false,
-        "supports_parallel_tool_calls": false
-      },
-      "protocol_defaults": {},
-      "extra": {
-        "family": "glm",
-        "source_provider": "openrouter",
-        "source_model_id": "z-ai/glm-5.2:free",
-        "source_name": "GLM 5.2 (free)"
-      }
-    },
-    {
-      "provider": "openrouter",
       "model": "z-ai/glm-5.3",
       "api_family": "openai-responses",
       "base_url": "https://openrouter.ai/api/v1",
@@ -15429,12 +15789,12 @@
       "supports_image_outputs": false,
       "supports_json_mode": true,
       "supports_prompt_caching": true,
-      "context_window": 1310720,
-      "max_output_tokens": 131072,
+      "context_window": 1048576,
+      "max_output_tokens": 943717,
       "pricing": {
-        "input_per_million": "0.6538",
-        "output_per_million": "2.0548",
-        "cache_read_per_million": "0.12142",
+        "input_per_million": "1.4",
+        "output_per_million": "4.4",
+        "cache_read_per_million": "0.26",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -15463,12 +15823,12 @@
       "supports_image_outputs": false,
       "supports_json_mode": true,
       "supports_prompt_caching": true,
-      "context_window": 1310720,
-      "max_output_tokens": 943718,
+      "context_window": 1048576,
+      "max_output_tokens": 943717,
       "pricing": {
         "input_per_million": "0.15",
         "output_per_million": "0.5",
-        "cache_read_per_million": "0.05",
+        "cache_read_per_million": "0.03",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -15502,7 +15862,7 @@
       "pricing": {
         "input_per_million": "0.37",
         "output_per_million": "1.25",
-        "cache_read_per_million": "0.075",
+        "cache_read_per_million": "0.09",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -15517,6 +15877,40 @@
         "source_provider": "openrouter",
         "source_model_id": "z-ai/glm-5.3-flashx",
         "source_name": "GLM 5.3 FlashX"
+      }
+    },
+    {
+      "provider": "openrouter",
+      "model": "z-ai/glm-5.3-prime",
+      "api_family": "openai-responses",
+      "base_url": "https://openrouter.ai/api/v1",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_reasoning": true,
+      "supports_images": false,
+      "supports_image_outputs": false,
+      "supports_json_mode": false,
+      "supports_prompt_caching": true,
+      "context_window": 1000000,
+      "max_output_tokens": 131072,
+      "pricing": {
+        "input_per_million": "2.8",
+        "output_per_million": "8.8",
+        "cache_read_per_million": "0.56",
+        "cache_write_per_million": null
+      },
+      "capabilities": {
+        "supports_developer_role": true,
+        "requires_explicit_reasoning_disable": false,
+        "usage_final_only": false,
+        "supports_parallel_tool_calls": true
+      },
+      "protocol_defaults": {},
+      "extra": {
+        "family": "glm",
+        "source_provider": "openrouter",
+        "source_model_id": "z-ai/glm-5.3-prime",
+        "source_name": "GLM 5.3 Prime"
       }
     },
     {
@@ -15704,9 +16098,9 @@
       "context_window": 1048576,
       "max_output_tokens": 943718,
       "pricing": {
-        "input_per_million": "0.12",
-        "output_per_million": "0.48",
-        "cache_read_per_million": "0.0036",
+        "input_per_million": "0.0198",
+        "output_per_million": "0.396",
+        "cache_read_per_million": "0.00291",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -15738,9 +16132,9 @@
       "context_window": 1048576,
       "max_output_tokens": 393216,
       "pricing": {
-        "input_per_million": "0.54384",
-        "output_per_million": "1.63152",
-        "cache_read_per_million": "0.017304",
+        "input_per_million": "0.123",
+        "output_per_million": "3.5",
+        "cache_read_per_million": "0.123",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -15769,12 +16163,12 @@
       "supports_image_outputs": false,
       "supports_json_mode": true,
       "supports_prompt_caching": true,
-      "context_window": 1310720,
+      "context_window": 1048576,
       "max_output_tokens": 943718,
       "pricing": {
-        "input_per_million": "0.03",
-        "output_per_million": "1",
-        "cache_read_per_million": "0.008",
+        "input_per_million": "0.0099",
+        "output_per_million": "0.13068",
+        "cache_read_per_million": "0.001386",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -15874,9 +16268,9 @@
       "context_window": 1048576,
       "max_output_tokens": 943718,
       "pricing": {
-        "input_per_million": "1.5",
-        "output_per_million": "7.5",
-        "cache_read_per_million": "0.15",
+        "input_per_million": "0.3177",
+        "output_per_million": "7.9431",
+        "cache_read_per_million": "0.4",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -16012,7 +16406,7 @@
       "pricing": {
         "input_per_million": "2",
         "output_per_million": "10",
-        "cache_read_per_million": "0.2",
+        "cache_read_per_million": "0.1",
         "cache_write_per_million": "2.5"
       },
       "capabilities": {
@@ -16078,9 +16472,9 @@
       "context_window": 500000,
       "max_output_tokens": 450000,
       "pricing": {
-        "input_per_million": "1.6",
-        "output_per_million": "4.8",
-        "cache_read_per_million": "0.4",
+        "input_per_million": "2",
+        "output_per_million": "6",
+        "cache_read_per_million": "0.5",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -16109,12 +16503,12 @@
       "supports_image_outputs": false,
       "supports_json_mode": true,
       "supports_prompt_caching": true,
-      "context_window": 1310720,
+      "context_window": 1048576,
       "max_output_tokens": 943718,
       "pricing": {
-        "input_per_million": "0.075",
-        "output_per_million": "0.25",
-        "cache_read_per_million": "0.015",
+        "input_per_million": "0.02",
+        "output_per_million": "0.2475",
+        "cache_read_per_million": "0.01",
         "cache_write_per_million": null
       },
       "capabilities": {
@@ -16143,12 +16537,12 @@
       "supports_image_outputs": false,
       "supports_json_mode": true,
       "supports_prompt_caching": true,
-      "context_window": 1310720,
+      "context_window": 1048576,
       "max_output_tokens": 131072,
       "pricing": {
-        "input_per_million": "0.6538",
-        "output_per_million": "2.0548",
-        "cache_read_per_million": "0.12142",
+        "input_per_million": "0.13",
+        "output_per_million": "4",
+        "cache_read_per_million": "0.13",
         "cache_write_per_million": null
       },
       "capabilities": {
